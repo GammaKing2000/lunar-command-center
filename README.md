@@ -50,6 +50,20 @@ pip install flask flask-cors flask-socketio
 python moonrover_server.py
 ```
 
+### Robot Brain (Jetson Nano)
+
+The robot logic runs on the Jetson Nano. It handles the gamepad, camera, and mapping, then sends data to the server.
+
+```bash
+# Install dependencies (on Jetson)
+pip install inputs opencv-python requests jetracer
+
+# Run the brain
+python moonrover_brain.py
+```
+
+**Note:** Ensure `SERVER_IP` in `moonrover_brain.py` matches the machine running `moonrover_server.py`.
+
 ## Telemetry Data Format
 
 The dashboard receives `telemetry_update` events with the following payload:
