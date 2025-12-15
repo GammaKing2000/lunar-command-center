@@ -2,95 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import '@fontsource/orbitron/400.css';
+@import '@fontsource/orbitron/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/700.css';
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Deep Space Theme */
+    --background: 220 30% 5%;
+    --foreground: 210 20% 90%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 220 25% 8%;
+    --card-foreground: 210 20% 90%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 220 25% 8%;
+    --popover-foreground: 210 20% 90%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* HUD Cyan */
+    --primary: 187 94% 43%;
+    --primary-foreground: 220 30% 5%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Panel backgrounds */
+    --secondary: 220 25% 12%;
+    --secondary-foreground: 210 20% 90%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 20% 15%;
+    --muted-foreground: 215 15% 55%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Electric accent */
+    --accent: 187 94% 43%;
+    --accent-foreground: 220 30% 5%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Alert Red */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Success Green */
+    --success: 158 64% 40%;
+    --success-foreground: 220 30% 5%;
 
-    --radius: 0.5rem;
+    --border: 187 40% 20%;
+    --input: 220 25% 15%;
+    --ring: 187 94% 43%;
 
-    --sidebar-background: 0 0% 98%;
+    --radius: 0.25rem;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Custom Mission Control Colors */
+    --hud-cyan: 187 94% 43%;
+    --hud-cyan-glow: 187 94% 50%;
+    --alert-red: 0 84% 60%;
+    --bio-green: 158 64% 40%;
+    --space-black: 220 30% 5%;
+    --panel-bg: 220 25% 8%;
+    --grid-line: 220 30% 15%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Glow effects */
+    --glow-cyan: 0 0 20px hsl(187 94% 43% / 0.4);
+    --glow-red: 0 0 20px hsl(0 84% 60% / 0.4);
+    --glow-green: 0 0 20px hsl(158 64% 40% / 0.4);
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 220 25% 8%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 187 94% 43%;
+    --sidebar-primary-foreground: 220 30% 5%;
+    --sidebar-accent: 220 25% 15%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 187 40% 20%;
+    --sidebar-ring: 187 94% 43%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 220 30% 5%;
+    --foreground: 210 20% 90%;
+    --card: 220 25% 8%;
+    --card-foreground: 210 20% 90%;
+    --popover: 220 25% 8%;
+    --popover-foreground: 210 20% 90%;
+    --primary: 187 94% 43%;
+    --primary-foreground: 220 30% 5%;
+    --secondary: 220 25% 12%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 220 20% 15%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 187 94% 43%;
+    --accent-foreground: 220 30% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 187 40% 20%;
+    --input: 220 25% 15%;
+    --ring: 187 94% 43%;
   }
 }
 
@@ -100,6 +101,239 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Panel */
+  .glass-panel {
+    @apply relative overflow-hidden;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--panel-bg) / 0.9) 0%,
+      hsl(var(--panel-bg) / 0.7) 100%
+    );
+    border: 1px solid hsl(var(--hud-cyan) / 0.3);
+    box-shadow: 
+      inset 0 1px 0 hsl(var(--hud-cyan) / 0.1),
+      0 0 30px hsl(var(--hud-cyan) / 0.1),
+      0 4px 20px hsl(var(--space-black) / 0.5);
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--hud-cyan) / 0.5),
+      transparent
+    );
+  }
+
+  /* Chamfered corners */
+  .chamfer {
+    clip-path: polygon(
+      12px 0, calc(100% - 12px) 0,
+      100% 12px, 100% calc(100% - 12px),
+      calc(100% - 12px) 100%, 12px 100%,
+      0 calc(100% - 12px), 0 12px
+    );
+  }
+
+  /* Panel Header */
+  .panel-header {
+    @apply flex items-center justify-between px-4 py-2;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--hud-cyan) / 0.15) 0%,
+      transparent 100%
+    );
+    border-bottom: 1px solid hsl(var(--hud-cyan) / 0.2);
+  }
+
+  .panel-title {
+    @apply text-sm font-bold tracking-widest;
+    color: hsl(var(--hud-cyan));
+    text-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+  }
+
+  /* Data Display */
+  .data-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--foreground));
+  }
+
+  .data-label {
+    @apply text-xs uppercase tracking-wider;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Live Badge */
+  .live-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded;
+    background: hsl(var(--bio-green) / 0.2);
+    border: 1px solid hsl(var(--bio-green) / 0.5);
+    color: hsl(var(--bio-green));
+  }
+
+  .live-dot {
+    @apply w-2 h-2 rounded-full;
+    background: hsl(var(--bio-green));
+    box-shadow: 0 0 8px hsl(var(--bio-green));
+    animation: pulse-glow 1.5s ease-in-out infinite;
+  }
+
+  /* Gauge Track */
+  .gauge-track {
+    @apply relative h-2 rounded-sm overflow-hidden;
+    background: hsl(var(--muted));
+  }
+
+  .gauge-fill {
+    @apply absolute left-0 top-0 h-full transition-all duration-150 ease-out;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--hud-cyan)),
+      hsl(var(--hud-cyan-glow))
+    );
+    box-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+  }
+
+  .gauge-fill-reverse {
+    @apply absolute left-0 top-0 h-full transition-all duration-150 ease-out;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--alert-red)),
+      hsl(var(--alert-red) / 0.8)
+    );
+    box-shadow: 0 0 10px hsl(var(--alert-red) / 0.5);
+  }
+
+  /* Grid Background */
+  .grid-bg {
+    background-image: 
+      linear-gradient(hsl(var(--grid-line) / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line) / 0.3) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Scanline Effect */
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(var(--space-black) / 0.1) 2px,
+      hsl(var(--space-black) / 0.1) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* HUD Overlay */
+  .hud-crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 1px solid hsl(var(--hud-cyan) / 0.5);
+    border-radius: 50%;
+  }
+
+  .hud-crosshair::before,
+  .hud-crosshair::after {
+    content: '';
+    position: absolute;
+    background: hsl(var(--hud-cyan) / 0.7);
+  }
+
+  .hud-crosshair::before {
+    top: 50%;
+    left: -10px;
+    right: -10px;
+    height: 1px;
+  }
+
+  .hud-crosshair::after {
+    left: 50%;
+    top: -10px;
+    bottom: -10px;
+    width: 1px;
+  }
+
+  /* Bounding Box */
+  .crater-box {
+    position: absolute;
+    border: 2px solid hsl(var(--alert-red));
+    box-shadow: 
+      inset 0 0 10px hsl(var(--alert-red) / 0.2),
+      0 0 15px hsl(var(--alert-red) / 0.3);
+  }
+
+  .crater-label {
+    @apply absolute -top-5 left-0 px-1 text-xs font-bold uppercase;
+    background: hsl(var(--alert-red));
+    color: hsl(var(--destructive-foreground));
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Orbitron', sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+  }
+
+  .text-glow-red {
+    text-shadow: 0 0 10px hsl(var(--alert-red) / 0.5);
+  }
+
+  .text-glow-green {
+    text-shadow: 0 0 10px hsl(var(--bio-green) / 0.5);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
   }
 }
