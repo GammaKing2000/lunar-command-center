@@ -1,73 +1,101 @@
-# Welcome to your Lovable project
+# Moon Rover Mission Control Dashboard
 
-## Project info
+A futuristic, sci-fi mission control interface for monitoring and controlling a lunar rover. Built with React, Tailwind CSS, and Socket.IO.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![Dashboard Preview](https://img.shields.io/badge/Status-Active-cyan)
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **Live Vision Panel** - Real-time video feed from the rover with HUD overlay, crosshairs, and crater detection bounding boxes
+- **Tactical Map** - 2D top-down view showing rover position, heading, movement trail, and detected craters
+- **Telemetry Deck** - Real-time gauges for throttle and steering, plus a rolling depth chart
+- **Mission Clock** - Elapsed mission time in T+ HH:MM:SS format
+- **Status Bar** - Connection status, data step counter, and system health
 
-**Use Lovable**
+## Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- React 18 + TypeScript
+- Tailwind CSS with custom sci-fi theme
+- Socket.IO for real-time telemetry
+- Recharts for data visualization
+- Lucide React icons
 
-Changes made via Lovable will be committed automatically to this repo.
+## Getting Started
 
-**Use your preferred IDE**
+### Prerequisites
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- Node.js 18+ and npm
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Installation
 
-Follow these steps:
+```bash
+# Install dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The dashboard will be available at `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Backend Server
 
-**Use GitHub Codespaces**
+The dashboard connects to a Socket.IO server at `http://192.168.2.109:8485`. To run the backend:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+# Install Python dependencies
+pip install flask flask-cors flask-socketio
 
-## What technologies are used for this project?
+# Run the server
+python moonrover_server.py
+```
 
-This project is built with:
+## Telemetry Data Format
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The dashboard receives `telemetry_update` events with the following payload:
 
-## How can I deploy this project?
+```json
+{
+  "img_base64": "base64-encoded-image",
+  "telemetry": {
+    "throttle": -1.0 to 1.0,
+    "steering": -1.0 to 1.0,
+    "pose": { "x": meters, "y": meters, "theta": radians }
+  },
+  "perception": {
+    "live_craters": [{ "box": [x, y, w, h], "depth": meters }],
+    "map_craters": [{ "x": meters, "y": meters, "radius": meters }]
+  }
+}
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Configuration
 
-## Can I connect a custom domain to my Lovable project?
+To change the Socket.IO server address, update the URL in `src/hooks/useTelemetry.ts`:
 
-Yes, you can!
+```typescript
+const socket = io('http://YOUR_SERVER_IP:8485');
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Project Structure
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```
+src/
+├── components/
+│   ├── dashboard/
+│   │   ├── LiveVisionPanel.tsx  # Video feed with HUD
+│   │   ├── TacticalMap.tsx      # 2D rover map
+│   │   ├── TelemetryDeck.tsx    # Gauges and charts
+│   │   ├── DepthChart.tsx       # Rolling depth graph
+│   │   └── ...
+│   └── MissionControl.tsx       # Main layout
+├── hooks/
+│   └── useTelemetry.ts          # Socket.IO connection
+├── types/
+│   └── telemetry.ts             # TypeScript interfaces
+└── index.css                    # Theme and styles
+```
+
+## License
+
+MIT
