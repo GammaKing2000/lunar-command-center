@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ['Orbitron', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -47,6 +51,29 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        hud: {
+          cyan: "hsl(var(--hud-cyan))",
+          "cyan-glow": "hsl(var(--hud-cyan-glow))",
+        },
+        alert: {
+          red: "hsl(var(--alert-red))",
+        },
+        bio: {
+          green: "hsl(var(--bio-green))",
+        },
+        space: {
+          black: "hsl(var(--space-black))",
+        },
+        panel: {
+          bg: "hsl(var(--panel-bg))",
+        },
+        grid: {
+          line: "hsl(var(--grid-line))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -65,25 +92,32 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "pulse-glow": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.6", transform: "scale(0.85)" },
+        },
+        scan: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100%)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-glow": "pulse-glow 1.5s ease-in-out infinite",
+        scan: "scan 3s linear infinite",
+      },
+      boxShadow: {
+        "glow-cyan": "0 0 20px hsl(var(--hud-cyan) / 0.4)",
+        "glow-red": "0 0 20px hsl(var(--alert-red) / 0.4)",
+        "glow-green": "0 0 20px hsl(var(--bio-green) / 0.4)",
       },
     },
   },

@@ -1,0 +1,37 @@
+export interface Pose {
+  x: number;
+  y: number;
+  theta: number;
+}
+
+export interface Telemetry {
+  throttle: number;
+  steering: number;
+  pose: Pose;
+}
+
+export interface LiveCrater {
+  label?: string;
+  box: [number, number, number, number]; // [x, y, w, h]
+  depth: number;
+}
+
+export interface MapCrater {
+  id?: number;
+  x: number;
+  y: number;
+  radius: number;
+  depth?: number;
+}
+
+export interface Perception {
+  live_craters: LiveCrater[];
+  map_craters: MapCrater[];
+}
+
+export interface TelemetryPayload {
+  step?: number;
+  img_base64: string;
+  telemetry: Telemetry;
+  perception: Perception;
+}
