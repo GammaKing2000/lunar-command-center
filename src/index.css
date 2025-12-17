@@ -42,6 +42,10 @@
     --success: 158 64% 40%;
     --success-foreground: 220 30% 5%;
 
+    /* Warning Orange */
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 5%;
+
     --border: 187 40% 20%;
     --input: 220 25% 15%;
     --ring: 187 94% 43%;
@@ -50,12 +54,17 @@
 
     /* Custom Mission Control Colors */
     --hud-cyan: 187 94% 43%;
-    --hud-cyan-glow: 187 94% 50%;
+    --hud-cyan-glow: 187 94% 55%;
+    --hud-cyan-dim: 187 60% 30%;
     --alert-red: 0 84% 60%;
-    --bio-green: 158 64% 40%;
+    --bio-green: 158 64% 45%;
     --space-black: 220 30% 5%;
     --panel-bg: 220 25% 8%;
-    --grid-line: 220 30% 15%;
+    --grid-line: 220 30% 18%;
+    
+    /* Crater detection color (cyan-based) */
+    --crater-color: 187 80% 50%;
+    --crater-glow: 187 90% 60%;
 
     /* Glow effects */
     --glow-cyan: 0 0 20px hsl(187 94% 43% / 0.4);
@@ -113,20 +122,22 @@
 }
 
 @layer components {
-  /* Glassmorphism Panel */
+  /* Glassmorphism Panel - Enhanced */
   .glass-panel {
     @apply relative overflow-hidden;
     background: linear-gradient(
-      135deg,
-      hsl(var(--panel-bg) / 0.9) 0%,
-      hsl(var(--panel-bg) / 0.7) 100%
+      145deg,
+      hsl(var(--panel-bg) / 0.95) 0%,
+      hsl(var(--panel-bg) / 0.8) 50%,
+      hsl(var(--panel-bg) / 0.9) 100%
     );
-    border: 1px solid hsl(var(--hud-cyan) / 0.3);
+    border: 1px solid hsl(var(--hud-cyan) / 0.25);
     box-shadow: 
-      inset 0 1px 0 hsl(var(--hud-cyan) / 0.1),
-      0 0 30px hsl(var(--hud-cyan) / 0.1),
-      0 4px 20px hsl(var(--space-black) / 0.5);
-    backdrop-filter: blur(10px);
+      inset 0 1px 0 hsl(var(--hud-cyan) / 0.15),
+      inset 0 -1px 0 hsl(var(--space-black) / 0.3),
+      0 0 40px hsl(var(--hud-cyan) / 0.08),
+      0 8px 32px hsl(var(--space-black) / 0.6);
+    backdrop-filter: blur(12px);
   }
 
   .glass-panel::before {
@@ -138,8 +149,25 @@
     height: 1px;
     background: linear-gradient(
       90deg,
+      transparent 0%,
+      hsl(var(--hud-cyan) / 0.6) 20%,
+      hsl(var(--hud-cyan) / 0.8) 50%,
+      hsl(var(--hud-cyan) / 0.6) 80%,
+      transparent 100%
+    );
+  }
+
+  .glass-panel::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
       transparent,
-      hsl(var(--hud-cyan) / 0.5),
+      hsl(var(--hud-cyan) / 0.2),
       transparent
     );
   }
@@ -154,21 +182,22 @@
     );
   }
 
-  /* Panel Header */
+  /* Panel Header - Enhanced */
   .panel-header {
-    @apply flex items-center justify-between px-4 py-2;
+    @apply flex items-center justify-between px-4 py-2.5;
     background: linear-gradient(
       90deg,
-      hsl(var(--hud-cyan) / 0.15) 0%,
+      hsl(var(--hud-cyan) / 0.12) 0%,
+      hsl(var(--hud-cyan) / 0.05) 50%,
       transparent 100%
     );
-    border-bottom: 1px solid hsl(var(--hud-cyan) / 0.2);
+    border-bottom: 1px solid hsl(var(--hud-cyan) / 0.15);
   }
 
   .panel-title {
     @apply text-sm font-bold tracking-widest;
     color: hsl(var(--hud-cyan));
-    text-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+    text-shadow: 0 0 15px hsl(var(--hud-cyan) / 0.6);
   }
 
   /* Data Display */
@@ -183,56 +212,70 @@
     color: hsl(var(--muted-foreground));
   }
 
-  /* Live Badge */
+  /* Live Badge - Enhanced */
   .live-badge {
-    @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded;
-    background: hsl(var(--bio-green) / 0.2);
-    border: 1px solid hsl(var(--bio-green) / 0.5);
+    @apply inline-flex items-center gap-2 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded;
+    background: linear-gradient(135deg, hsl(var(--bio-green) / 0.25), hsl(var(--bio-green) / 0.1));
+    border: 1px solid hsl(var(--bio-green) / 0.6);
     color: hsl(var(--bio-green));
+    box-shadow: 0 0 20px hsl(var(--bio-green) / 0.2);
   }
 
   .live-dot {
-    @apply w-2 h-2 rounded-full;
+    @apply w-2.5 h-2.5 rounded-full;
     background: hsl(var(--bio-green));
-    box-shadow: 0 0 8px hsl(var(--bio-green));
+    box-shadow: 0 0 12px hsl(var(--bio-green) / 0.8);
     animation: pulse-glow 1.5s ease-in-out infinite;
   }
 
-  /* Gauge Track */
+  /* Gauge Track - Enhanced */
   .gauge-track {
-    @apply relative h-2 rounded-sm overflow-hidden;
-    background: hsl(var(--muted));
+    @apply relative h-4 rounded overflow-hidden;
+    background: linear-gradient(
+      180deg,
+      hsl(var(--muted) / 0.8) 0%,
+      hsl(var(--muted)) 50%,
+      hsl(var(--muted) / 0.9) 100%
+    );
+    box-shadow: inset 0 2px 4px hsl(var(--space-black) / 0.5);
   }
 
   .gauge-fill {
-    @apply absolute left-0 top-0 h-full transition-all duration-150 ease-out;
+    @apply absolute top-0 h-full transition-all duration-200 ease-out;
     background: linear-gradient(
-      90deg,
-      hsl(var(--hud-cyan)),
-      hsl(var(--hud-cyan-glow))
+      180deg,
+      hsl(var(--hud-cyan-glow)) 0%,
+      hsl(var(--hud-cyan)) 50%,
+      hsl(var(--hud-cyan-dim)) 100%
     );
-    box-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+    box-shadow: 
+      0 0 15px hsl(var(--hud-cyan) / 0.6),
+      inset 0 1px 0 hsl(var(--foreground) / 0.3);
   }
 
   .gauge-fill-reverse {
-    @apply absolute left-0 top-0 h-full transition-all duration-150 ease-out;
+    @apply absolute top-0 h-full transition-all duration-200 ease-out;
     background: linear-gradient(
-      90deg,
-      hsl(var(--alert-red)),
-      hsl(var(--alert-red) / 0.8)
+      180deg,
+      hsl(var(--warning) / 1) 0%,
+      hsl(var(--warning) / 0.8) 50%,
+      hsl(var(--warning) / 0.6) 100%
     );
-    box-shadow: 0 0 10px hsl(var(--alert-red) / 0.5);
+    box-shadow: 
+      0 0 15px hsl(var(--warning) / 0.5),
+      inset 0 1px 0 hsl(var(--foreground) / 0.3);
   }
 
-  /* Grid Background */
+  /* Grid Background - Enhanced */
   .grid-bg {
     background-image: 
-      linear-gradient(hsl(var(--grid-line) / 0.3) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--grid-line) / 0.3) 1px, transparent 1px);
-    background-size: 20px 20px;
+      radial-gradient(circle at 50% 50%, hsl(var(--hud-cyan) / 0.03) 0%, transparent 70%),
+      linear-gradient(hsl(var(--grid-line) / 0.25) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line) / 0.25) 1px, transparent 1px);
+    background-size: 100% 100%, 24px 24px, 24px 24px;
   }
 
-  /* Scanline Effect */
+  /* Scanline Effect - Enhanced */
   .scanlines::after {
     content: '';
     position: absolute;
@@ -241,58 +284,153 @@
       0deg,
       transparent,
       transparent 2px,
-      hsl(var(--space-black) / 0.1) 2px,
-      hsl(var(--space-black) / 0.1) 4px
+      hsl(var(--space-black) / 0.08) 2px,
+      hsl(var(--space-black) / 0.08) 4px
     );
     pointer-events: none;
   }
 
-  /* HUD Overlay */
+  /* HUD Crosshair - Enhanced */
   .hud-crosshair {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
+  }
+
+  .hud-crosshair::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -15px;
+    right: -15px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--hud-cyan) / 0.3) 20%,
+      hsl(var(--hud-cyan) / 0.7) 45%,
+      transparent 48%,
+      transparent 52%,
+      hsl(var(--hud-cyan) / 0.7) 55%,
+      hsl(var(--hud-cyan) / 0.3) 80%,
+      transparent 100%
+    );
+  }
+
+  .hud-crosshair::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -15px;
+    bottom: -15px;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      hsl(var(--hud-cyan) / 0.3) 20%,
+      hsl(var(--hud-cyan) / 0.7) 45%,
+      transparent 48%,
+      transparent 52%,
+      hsl(var(--hud-cyan) / 0.7) 55%,
+      hsl(var(--hud-cyan) / 0.3) 80%,
+      transparent 100%
+    );
+  }
+
+  /* Crosshair inner circle */
+  .hud-crosshair-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
     border: 1px solid hsl(var(--hud-cyan) / 0.5);
     border-radius: 50%;
   }
 
-  .hud-crosshair::before,
-  .hud-crosshair::after {
-    content: '';
+  /* Crosshair outer circle */
+  .hud-crosshair-outer {
     position: absolute;
-    background: hsl(var(--hud-cyan) / 0.7);
-  }
-
-  .hud-crosshair::before {
     top: 50%;
-    left: -10px;
-    right: -10px;
-    height: 1px;
-  }
-
-  .hud-crosshair::after {
     left: 50%;
-    top: -10px;
-    bottom: -10px;
-    width: 1px;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    border: 1px solid hsl(var(--hud-cyan) / 0.3);
+    border-radius: 50%;
   }
 
-  /* Bounding Box */
+  /* Bounding Box - Now Cyan themed */
   .crater-box {
     position: absolute;
-    border: 2px solid hsl(var(--alert-red));
+    border: 2px solid hsl(var(--crater-color));
+    background: hsl(var(--crater-color) / 0.08);
     box-shadow: 
-      inset 0 0 10px hsl(var(--alert-red) / 0.2),
-      0 0 15px hsl(var(--alert-red) / 0.3);
+      inset 0 0 15px hsl(var(--crater-color) / 0.15),
+      0 0 20px hsl(var(--crater-color) / 0.25);
+    animation: detection-pulse 2s ease-in-out infinite;
   }
 
   .crater-label {
-    @apply absolute -top-5 left-0 px-1 text-xs font-bold uppercase;
+    @apply absolute -top-6 left-0 px-2 py-0.5 text-xs font-bold uppercase tracking-wide;
+    background: linear-gradient(135deg, hsl(var(--crater-color)), hsl(var(--crater-glow)));
+    color: hsl(var(--space-black));
+    border-radius: 2px;
+    box-shadow: 0 2px 8px hsl(var(--crater-color) / 0.4);
+  }
+
+  /* Tactical Elements */
+  .compass-rose {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    opacity: 0.7;
+  }
+
+  /* Status Indicator */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+    animation: status-pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot-ok {
+    background: hsl(var(--bio-green));
+    box-shadow: 0 0 8px hsl(var(--bio-green) / 0.6);
+  }
+
+  .status-dot-warning {
+    background: hsl(var(--warning));
+    box-shadow: 0 0 8px hsl(var(--warning) / 0.6);
+  }
+
+  .status-dot-error {
     background: hsl(var(--alert-red));
-    color: hsl(var(--destructive-foreground));
+    box-shadow: 0 0 8px hsl(var(--alert-red) / 0.6);
+  }
+
+  /* Value highlight effect */
+  .value-highlight {
+    @apply relative;
+  }
+
+  .value-highlight::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: hsl(var(--hud-cyan) / 0.1);
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .value-highlight:hover::after {
+    opacity: 1;
   }
 }
 
@@ -306,15 +444,27 @@
   }
 
   .text-glow-cyan {
-    text-shadow: 0 0 10px hsl(var(--hud-cyan) / 0.5);
+    text-shadow: 0 0 15px hsl(var(--hud-cyan) / 0.6);
   }
 
   .text-glow-red {
-    text-shadow: 0 0 10px hsl(var(--alert-red) / 0.5);
+    text-shadow: 0 0 15px hsl(var(--alert-red) / 0.6);
   }
 
   .text-glow-green {
-    text-shadow: 0 0 10px hsl(var(--bio-green) / 0.5);
+    text-shadow: 0 0 15px hsl(var(--bio-green) / 0.6);
+  }
+
+  .text-glow-warning {
+    text-shadow: 0 0 15px hsl(var(--warning) / 0.6);
+  }
+
+  .border-glow-cyan {
+    box-shadow: 0 0 20px hsl(var(--hud-cyan) / 0.3);
+  }
+
+  .border-glow-green {
+    box-shadow: 0 0 20px hsl(var(--bio-green) / 0.3);
   }
 }
 
@@ -322,18 +472,70 @@
   0%, 100% {
     opacity: 1;
     transform: scale(1);
+    box-shadow: 0 0 12px hsl(var(--bio-green) / 0.8);
   }
   50% {
-    opacity: 0.6;
-    transform: scale(0.85);
+    opacity: 0.7;
+    transform: scale(0.9);
+    box-shadow: 0 0 20px hsl(var(--bio-green) / 1);
   }
 }
 
 @keyframes scan {
   0% {
     transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
   }
   100% {
-    transform: translateY(100%);
+    transform: translateY(2000%);
+    opacity: 0;
+  }
+}
+
+@keyframes detection-pulse {
+  0%, 100% {
+    border-color: hsl(var(--crater-color));
+    box-shadow: 
+      inset 0 0 15px hsl(var(--crater-color) / 0.15),
+      0 0 20px hsl(var(--crater-color) / 0.25);
+  }
+  50% {
+    border-color: hsl(var(--crater-glow));
+    box-shadow: 
+      inset 0 0 20px hsl(var(--crater-color) / 0.25),
+      0 0 30px hsl(var(--crater-color) / 0.4);
+  }
+}
+
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes data-update {
+  0% {
+    background: hsl(var(--hud-cyan) / 0.2);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@keyframes rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }

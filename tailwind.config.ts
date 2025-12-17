@@ -55,15 +55,24 @@ export default {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
         },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         hud: {
           cyan: "hsl(var(--hud-cyan))",
           "cyan-glow": "hsl(var(--hud-cyan-glow))",
+          "cyan-dim": "hsl(var(--hud-cyan-dim))",
         },
         alert: {
           red: "hsl(var(--alert-red))",
         },
         bio: {
           green: "hsl(var(--bio-green))",
+        },
+        crater: {
+          DEFAULT: "hsl(var(--crater-color))",
+          glow: "hsl(var(--crater-glow))",
         },
         space: {
           black: "hsl(var(--space-black))",
