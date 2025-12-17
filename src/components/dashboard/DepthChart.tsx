@@ -122,7 +122,7 @@ export function DepthChart({ depthHistory }: DepthChartProps) {
                 
                 {/* Line glow effect */}
                 <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="2" result="blur" />
+                  <feGaussianBlur stdDeviation="1" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
                     <feMergeNode in="SourceGraphic" />
@@ -131,7 +131,7 @@ export function DepthChart({ depthHistory }: DepthChartProps) {
 
                 {/* Dot glow */}
                 <filter id="dotGlow" x="-100%" y="-100%" width="300%" height="300%">
-                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feGaussianBlur stdDeviation="2" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
                     <feMergeNode in="SourceGraphic" />
@@ -153,7 +153,7 @@ export function DepthChart({ depthHistory }: DepthChartProps) {
                 d={chartData.linePath}
                 fill="none"
                 stroke="hsl(var(--hud-cyan))"
-                strokeWidth={2.5}
+                strokeWidth={1.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 filter="url(#lineGlow)"
@@ -165,7 +165,7 @@ export function DepthChart({ depthHistory }: DepthChartProps) {
                   <circle
                     cx={chartData.points[chartData.points.length - 1].x}
                     cy={chartData.points[chartData.points.length - 1].y}
-                    r={8}
+                    r={6}
                     fill="hsl(var(--hud-cyan))"
                     opacity={0.3}
                     filter="url(#dotGlow)"
@@ -173,10 +173,10 @@ export function DepthChart({ depthHistory }: DepthChartProps) {
                   <circle
                     cx={chartData.points[chartData.points.length - 1].x}
                     cy={chartData.points[chartData.points.length - 1].y}
-                    r={5}
+                    r={3}
                     fill="hsl(var(--hud-cyan))"
                     stroke="hsl(var(--foreground))"
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                   />
                 </g>
               )}

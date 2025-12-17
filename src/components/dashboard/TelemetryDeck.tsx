@@ -14,12 +14,12 @@ export function TelemetryDeck({ throttle, steering, depthHistory }: TelemetryDec
   const steeringDirection = steering > 0.1 ? 'RIGHT' : steering < -0.1 ? 'LEFT' : 'CENTER';
   
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full">
       {/* Throttle & Steering */}
       <PanelWrapper 
         title="Drive Control" 
         badge={<Gauge className="w-4 h-4 text-primary animate-pulse" />}
-        className="lg:col-span-1"
+        className=""
       >
         <div className="space-y-5 p-1">
           <TelemetryGauge
@@ -112,7 +112,7 @@ export function TelemetryDeck({ throttle, steering, depthHistory }: TelemetryDec
       </PanelWrapper>
 
       {/* Depth Chart */}
-      <div className="lg:col-span-2 h-full">
+      <div className="h-full">
         <DepthChart depthHistory={depthHistory} />
       </div>
     </div>

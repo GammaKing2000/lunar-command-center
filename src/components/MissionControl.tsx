@@ -42,7 +42,7 @@ export function MissionControl() {
         </div>
 
         {/* Bottom Row - Telemetry Deck */}
-        <div className="h-[200px]">
+        <div className="h-[160px]">
           <TelemetryDeck
             throttle={telemetry?.telemetry?.throttle || 0}
             steering={telemetry?.telemetry?.steering || 0}
