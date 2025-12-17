@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { TelemetryPayload, Pose } from '@/types/telemetry';
 
-const SOCKET_URL = 'http://192.168.2.109:8485';
+const SOCKET_URL = 'http://192.168.1.8:8485';
 
 interface UseTelemetryReturn {
   telemetry: TelemetryPayload | null;

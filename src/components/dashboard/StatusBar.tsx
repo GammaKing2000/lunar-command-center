@@ -24,7 +24,7 @@ export function StatusBar({ isConnected, step }: StatusBarProps) {
         {/* Socket URL */}
         <div className="hidden sm:flex items-center gap-2 text-muted-foreground">
           <Radio className="w-3 h-3" />
-          <span className="text-xs font-mono">192.168.2.109:8485</span>
+          <span className="text-xs font-mono">192.168.1.8:8485</span>
         </div>
 
         {/* Step Counter */}
