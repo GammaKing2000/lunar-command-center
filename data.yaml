@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['1', 'alien', 'boundary', 'crater', 'water-sight']
+
+roboflow:
+  workspace: dissidyo
+  project: visiondrive-xbsnh
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/dissidyo/visiondrive-xbsnh/dataset/1

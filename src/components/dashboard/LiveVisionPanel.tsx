@@ -79,32 +79,7 @@ export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisio
           <div className="absolute bottom-1/4 left-1/4 w-4 h-4 border border-primary/30 rounded-full" />
           <div className="absolute bottom-1/4 right-1/4 w-4 h-4 border border-primary/30 rounded-full" />
 
-          {/* Crater Bounding Boxes */}
-          {craters.map((crater, index) => {
-            const [x, y, w, h] = crater.box;
-            return (
-              <div
-                key={index}
-                className="crater-box"
-                style={{
-                  left: `${(x / 416) * 100}%`,
-                  top: `${(y / 416) * 100}%`,
-                  width: `${(w / 416) * 100}%`,
-                  height: `${(h / 416) * 100}%`,
-                }}
-              >
-                <span className="crater-label">
-                  <Target className="w-3 h-3 inline mr-1" />
-                  {crater.label || 'CRATER'} {crater.depth.toFixed(2)}m
-                </span>
-                {/* Corner markers */}
-                <div className="absolute -top-0.5 -left-0.5 w-2 h-2 border-t-2 border-l-2 border-[hsl(var(--crater-glow))]" />
-                <div className="absolute -top-0.5 -right-0.5 w-2 h-2 border-t-2 border-r-2 border-[hsl(var(--crater-glow))]" />
-                <div className="absolute -bottom-0.5 -left-0.5 w-2 h-2 border-b-2 border-l-2 border-[hsl(var(--crater-glow))]" />
-                <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 border-b-2 border-r-2 border-[hsl(var(--crater-glow))]" />
-              </div>
-            );
-          })}
+          {/* Crater detection boxes removed - now drawn by backend segmentation */}
 
           {/* Scan Line Effect - Enhanced */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">

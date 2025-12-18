@@ -135,8 +135,10 @@ class MoonRoverBrain:
             if self.gamepad:
                 g_throt, g_steer = self.gamepad.get_drive_command()
                 self.set_drive(g_throt, g_steer)
+                self.steering_raw = g_steer  # Store RAW gamepad value for telemetry
             else:
                 self.set_drive(0, 0) # Safety stop if no gamepad logic
+                self.steering_raw = 0.0
 
             # --- 2. Perceptions (Camera) ---
             ret, frame = self.cam.read()
@@ -148,14 +150,15 @@ class MoonRoverBrain:
             
             # --- 3. Telemetry Streaming (Send to Laptop) ---
             # Send every 3rd frame (approx 10 FPS) to save bandwidth/latency
-            if frame_counter % 3 == 0:
+            if frame_counter % 1 == 0:
                 _, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 
                 # Payload: Image + Rover State
+                # FIX: Send RAW gamepad steering, not servo output
                 payload = {
                     'img_base64': base64.b64encode(jpg).decode(),
                     'throttle': self.throttle_val,
-                    'steer_real': -self.car.steering, 
+                    'steer_real': self.steering_raw,  # Now sending raw gamepad value (-1 to +1)
                     'racer': 'run' # Keep alive status
                 }
                 self.telemetry.update(payload)

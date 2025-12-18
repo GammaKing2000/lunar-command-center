@@ -14,6 +14,8 @@ export interface LiveCrater {
   label?: string;
   box: [number, number, number, number]; // [x, y, w, h]
   depth: number;
+  radius_m?: number;
+  track_id?: number;
 }
 
 export interface MapCrater {
@@ -22,6 +24,7 @@ export interface MapCrater {
   y: number;
   radius: number;
   depth?: number;
+  label?: string;
 }
 
 export interface Perception {

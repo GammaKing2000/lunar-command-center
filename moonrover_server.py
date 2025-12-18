@@ -36,7 +36,7 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # --- Systems Initialization ---
 vision = VisionSystem() if VisionSystem else None
-mapper = MapManagerLaptop() if MapManagerLaptop else None
+mapper = MapManagerLaptop(width_m=1.2, height_m=1.92) if MapManagerLaptop else None
 
 # --- State ---
 web_command = {'racer': 'run'}
@@ -47,6 +47,9 @@ broadcast_event = Event()
 state_lock = Lock()
 
 last_telemetry_time = time.time()
+yolo_frame_counter = 0
+cached_craters = []
+cached_annotated_b64 = None
 
 @app.route('/')
 def index():
@@ -70,7 +73,7 @@ def receive_telemetry():
     
     # 1. Extract Raw Data from Rover
     img_b64_raw = request.form.get('img_base64', '')
-    throttle = request.form.get('throttle', type=float, default=0.0)
+    throttle = request.form.get('throttle', type=float, default=0.0)*(-1)
     steer_real = request.form.get('steer_real', type=float, default=0.0)
     
     # Decode Image
@@ -85,18 +88,31 @@ def receive_telemetry():
             logger.error(f"Image Decode Error: {e}")
 
     # 2. Run Laptop-Side Perception
+    global yolo_frame_counter, cached_craters, cached_annotated_b64
     
-    # A. Vision (Object Detection)
-    live_craters = []
-    annotated_b64 = img_b64_raw # Default to sending back what we got if no processing
+    # A. Vision (Object Detection) - Run YOLO every 5th frame for performance
+    live_craters = cached_craters
+    annotated_b64 = img_b64_raw  # Default to raw image
     
-    if img is not None and vision:
-        # Run YOLO
-        live_craters, annotated_frame = vision.process_frame(img)
+    if img is not None:
+        yolo_frame_counter += 1
         
-        # Re-encode annotated image for the Dashboard
-        _, buf = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
-        annotated_b64 = base64.b64encode(buf).decode()
+        if vision and yolo_frame_counter % 1 == 0:  # Real-time: every frame
+            # Run YOLO on this frame
+            live_craters, annotated_frame = vision.process_frame(img)
+            cached_craters = live_craters
+            
+            # Re-encode annotated image for the Dashboard
+            _, buf = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            cached_annotated_b64 = base64.b64encode(buf).decode()
+            annotated_b64 = cached_annotated_b64
+        elif cached_annotated_b64:
+            # Use cached YOLO output for non-YOLO frames
+            annotated_b64 = cached_annotated_b64
+        else:
+            # No YOLO yet, just send raw frame with minimal re-encode
+            _, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            annotated_b64 = base64.b64encode(buf).decode()
 
     # B. Mapping (SLAM)
     map_status = {'pose': {'x':0,'y':0,'theta':0}, 'craters': []}
@@ -163,6 +179,32 @@ def handle_frontend_command(data):
     if cmd:
         web_command['racer'] = cmd
         logger.info(f"Socket Command: {cmd}")
+
+@socketio.on('control')
+def handle_control(data):
+    global web_command
+    # data: {'throttle': X, 'steering': Y}
+    # We store this to command the rover
+    web_command['throttle'] = float(data.get('throttle', 0))
+    web_command['steering'] = float(data.get('steering', 0))
+
+@socketio.on('set_kinematics')
+def handle_kinematics(data):
+    # data: {'mode': 'jetracer' | 'ugv'}
+    mode = data.get('mode', 'jetracer')
+    if mapper:
+        mapper.set_kinematics(mode)
+    print(f"Server: Set Kinematics to {mode}")
+
+@socketio.on('reset_map')
+def handle_reset_map(data):
+    if mapper:
+        mapper.reset_map()
+    if vision:
+        vision.reset_tracker()  # Also reset the object tracker
+    # Broadcast to all clients to clear their local history (trails, graphs)
+    socketio.emit('map_reset') 
+    print("Server: Map Reset Command Received & Broadcasted")
 
 if __name__ == '__main__':
     # Run on 0.0.0.0 to be accessible from LAN

@@ -9,10 +9,10 @@ interface TacticalMapProps {
   mapCraters: MapCrater[];
 }
 
-const MAP_WIDTH = 320;
-const MAP_HEIGHT = 220;
-const WORLD_WIDTH = 3; // 3 meters
-const WORLD_HEIGHT = 2; // 2 meters
+const MAP_WIDTH = 240;
+const MAP_HEIGHT = 384;
+const WORLD_WIDTH = 1.2; // 1.2 meters
+const WORLD_HEIGHT = 1.92; // 1.92 meters
 
 function worldToScreen(x: number, y: number): { sx: number; sy: number } {
   const sx = (x / WORLD_WIDTH) * MAP_WIDTH;
@@ -94,11 +94,22 @@ export function TacticalMap({ currentPose, positionHistory, mapCraters }: Tactic
     const { sx, sy } = worldToScreen(currentPose.x, currentPose.y);
     const angle = -currentPose.theta * (180 / Math.PI) + 90;
 
+    // Dimensions in meters
+    const ROVER_LENGTH_M = 0.25; // 25cm
+    const ROVER_WIDTH_M = 0.02;  // 2cm (Very thin!)
+
+    // Convert to pixels
+    // MAP_WIDTH (240) / WORLD_WIDTH (1.2) = 200 pixels/meter
+    const METERS_TO_PIXELS = MAP_WIDTH / WORLD_WIDTH;
+    
+    const lengthPx = ROVER_LENGTH_M * METERS_TO_PIXELS; // 50px
+    const widthPx = ROVER_WIDTH_M * METERS_TO_PIXELS;   // 4px
+
     return (
       <g transform={`translate(${sx}, ${sy})`}>
         {/* Outer glow pulse */}
         <circle
-          r={18}
+          r={lengthPx / 2 + 10}
           fill="none"
           stroke="hsl(var(--hud-cyan))"
           strokeWidth={1}
@@ -107,9 +118,9 @@ export function TacticalMap({ currentPose, positionHistory, mapCraters }: Tactic
           style={{ animationDuration: '2s' }}
         />
         
-        {/* Detection range circle */}
+        {/* Detection range circle (Arbitrary visual range) */}
         <circle
-          r={25}
+          r={lengthPx} 
           fill="hsl(var(--hud-cyan))"
           fillOpacity={0.05}
           stroke="hsl(var(--hud-cyan))"
@@ -119,34 +130,37 @@ export function TacticalMap({ currentPose, positionHistory, mapCraters }: Tactic
         />
 
         <g transform={`rotate(${angle})`}>
-          {/* Glow effect */}
-          <polygon
-            points="0,-14 10,10 -10,10"
-            fill="hsl(var(--hud-cyan))"
-            opacity={0.4}
-            filter="url(#roverGlow)"
-          />
-          {/* Rover body */}
-          <polygon
-            points="0,-12 8,8 -8,8"
+          {/* Rover Body (Rectangle) */}
+          <rect
+            x={-widthPx / 2}
+            y={-lengthPx / 2}
+            width={widthPx}
+            height={lengthPx}
             fill="hsl(var(--hud-cyan))"
             stroke="hsl(var(--foreground))"
-            strokeWidth={1.5}
+            strokeWidth={1}
+            opacity={0.9}
           />
-          {/* Direction indicator */}
+          
+          {/* Front Indicator (Triangle to show direction) */}
+          <polygon
+            points={`0,${-lengthPx/2 - 5} ${-widthPx},${-lengthPx/2 + 2} ${widthPx},${-lengthPx/2 + 2}`}
+            fill="hsl(var(--foreground))"
+          />
+          
+          {/* Rear Axle visual (just to give it some mass) */}
           <line
-            x1={0}
-            y1={-12}
-            x2={0}
-            y2={-20}
-            stroke="hsl(var(--foreground))"
-            strokeWidth={2}
-            strokeLinecap="round"
+            x1={-widthPx} 
+            y1={lengthPx/2 - 5} 
+            x2={widthPx} 
+            y2={lengthPx/2 - 5} 
+            stroke="hsl(var(--hud-cyan))" 
+            strokeWidth={1}
           />
         </g>
         
         {/* Center dot */}
-        <circle r={3} fill="hsl(var(--foreground))" />
+        <circle r={2} fill="hsl(var(--foreground))" />
       </g>
     );
   }, [currentPose]);
@@ -155,50 +169,98 @@ export function TacticalMap({ currentPose, positionHistory, mapCraters }: Tactic
     return mapCraters.map((crater, index) => {
       const { sx, sy } = worldToScreen(crater.x, crater.y);
       const radiusPixels = Math.max((crater.radius / WORLD_WIDTH) * MAP_WIDTH, 8);
+      const label = crater.label || 'crater';
+      
+      let color = "hsl(var(--hud-cyan))";
+      let icon = null;
+      let shape = "circle";
+
+      switch (label) {
+        case 'alien':
+          color = "hsl(var(--bio-green))";
+          shape = "alien";
+          break;
+        case 'boundary':
+          color = "hsl(var(--warning))";
+          shape = "boundary";
+          break;
+        case 'water-sight':
+          color = "#3b82f6"; // Blue
+          shape = "water";
+          break;
+        default:
+          color = "hsl(var(--hud-cyan))";
+          shape = "crater";
+      }
 
       return (
         <g key={crater.id || index}>
-          {/* Crater outer ring */}
-          <circle
-            cx={sx}
-            cy={sy}
-            r={radiusPixels + 3}
-            fill="none"
-            stroke="hsl(var(--hud-cyan))"
-            strokeWidth={0.5}
-            strokeDasharray="2 2"
-            opacity={0.3}
-          />
-          {/* Crater fill */}
-          <circle
-            cx={sx}
-            cy={sy}
-            r={radiusPixels}
-            fill="url(#craterGradient)"
-            stroke="hsl(var(--hud-cyan))"
-            strokeWidth={1.5}
-            opacity={0.7}
-          />
-          {/* Crater center */}
-          <circle
-            cx={sx}
-            cy={sy}
-            r={2}
-            fill="hsl(var(--hud-cyan))"
-            opacity={0.8}
-          />
-          {/* Crater label */}
+          {/* Object specific rendering */}
+          {shape === 'alien' && (
+             <g transform={`translate(${sx}, ${sy})`}>
+                <circle r={radiusPixels} fill={color} fillOpacity={0.2} stroke={color} strokeWidth={1} strokeDasharray="2 2" />
+                <text y={4} textAnchor="middle" fontSize={10}>👽</text>
+             </g>
+          )}
+          
+          {shape === 'boundary' && (
+             <g transform={`translate(${sx}, ${sy})`}>
+                <line x1={-radiusPixels} y1={-radiusPixels} x2={radiusPixels} y2={radiusPixels} stroke={color} strokeWidth={2} />
+                <line x1={-radiusPixels} y1={radiusPixels} x2={radiusPixels} y2={-radiusPixels} stroke={color} strokeWidth={2} />
+                <rect x={-radiusPixels} y={-radiusPixels} width={radiusPixels*2} height={radiusPixels*2} fill="none" stroke={color} strokeWidth={1} strokeDasharray="2 2" />
+             </g>
+          )}
+
+          {shape === 'water' && (
+             <g transform={`translate(${sx}, ${sy})`}>
+                <circle r={radiusPixels} fill={color} fillOpacity={0.3} />
+                <text y={4} textAnchor="middle" fontSize={10}>💧</text>
+             </g>
+          )}
+
+          {shape === 'crater' && (
+            <g>
+              <circle
+                cx={sx}
+                cy={sy}
+                r={radiusPixels + 3}
+                fill="none"
+                stroke={color}
+                strokeWidth={0.5}
+                strokeDasharray="2 2"
+                opacity={0.3}
+              />
+              <circle
+                cx={sx}
+                cy={sy}
+                r={radiusPixels}
+                fill="url(#craterGradient)" // Use generic gradient but maybe tint it?
+                stroke={color}
+                strokeWidth={1.5}
+                opacity={0.7}
+              />
+              <circle
+                cx={sx}
+                cy={sy}
+                r={2}
+                fill={color}
+                opacity={0.8}
+              />
+            </g>
+          )}
+
+          {/* Label */}
           <text
             x={sx}
             y={sy - radiusPixels - 8}
             textAnchor="middle"
             fontSize={9}
             fontWeight="bold"
-            fill="hsl(var(--hud-cyan))"
+            fill={color}
             fontFamily="JetBrains Mono"
             opacity={0.9}
           >
-            C{crater.id || index + 1}
+            {label.toUpperCase()} {crater.id}
           </text>
         </g>
       );
