@@ -69,6 +69,7 @@ export function MissionControl() {
             <LiveVisionPanel
               imageBase64={telemetry?.img_base64 || null}
               craters={telemetry?.perception?.live_craters || []}
+              resolution={telemetry?.perception?.resolution || [416, 416]}
               isConnected={isConnected}
             />
           </div>

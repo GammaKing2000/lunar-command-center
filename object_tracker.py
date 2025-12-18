@@ -17,13 +17,14 @@ class Track:
     """Represents a single tracked object"""
     _id_counter = 0
     
-    def __init__(self, box, depth, label):
+    def __init__(self, box, depth, label, radius=0.0):
         Track._id_counter += 1
         self.track_id = Track._id_counter
         
         self.box = box  # [x1, y1, x2, y2]
         self.depth = depth
         self.label = label
+        self.radius = radius
         self.state = TENTATIVE
         
         self.hits = 1  # Number of consecutive frames matched
@@ -33,10 +34,11 @@ class Track:
         # Store depth history for averaging
         self.depth_history = [depth]
     
-    def update(self, box, depth):
+    def update(self, box, depth, radius=0.0):
         """Update track with new detection"""
         self.box = box
         self.depth = depth
+        if radius > 0: self.radius = radius # Update radius if valid
         self.depth_history.append(depth)
         
         # Keep only last 10 depth readings
@@ -138,7 +140,7 @@ class ObjectTracker:
                 
                 # Update matched track
                 det = detections[d_idx]
-                self.tracks[t_idx].update(det['box'], det['depth'])
+                self.tracks[t_idx].update(det['box'], det['depth'], det.get('radius_m', 0.0))
                 
                 matched_track_ids.add(t_idx)
                 matched_det_ids.add(d_idx)
@@ -158,7 +160,8 @@ class ObjectTracker:
                 new_track = Track(
                     box=det['box'],
                     depth=det['depth'],
-                    label=det.get('label', 'crater')
+                    label=det.get('label', 'crater'),
+                    radius=det.get('radius_m', 0.0)
                 )
                 self.tracks.append(new_track)
         
@@ -183,6 +186,7 @@ class ObjectTracker:
                     'track_id': track.track_id,
                     'box': track.box,
                     'depth': track.get_average_depth(),
+                    'radius_m': track.radius,
                     'label': track.label,
                     'observation_count': track.total_observations
                 })

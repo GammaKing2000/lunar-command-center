@@ -143,14 +143,14 @@ class VisionSystem:
                     
                     if dist_m < 0: dist_m = 0.1
                 
-                # Draw label with depth info
-                depth_str = f"{dist_m:.2f}m"
-                extra_info = ""
-                if radius_m is not None:
-                    extra_info = f" R:{radius_m:.2f}m"
+                # Draw label with depth info (DISABLED FOR INTERACTIVE UI)
+                # depth_str = f"{dist_m:.2f}m"
+                # extra_info = ""
+                # if radius_m is not None:
+                #     extra_info = f" R:{radius_m:.2f}m"
                 
-                cv2.putText(annotated_frame, f"{label} {depth_str}{extra_info}", (x1, y1 - 10), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                # cv2.putText(annotated_frame, f"{label} {depth_str}{extra_info}", (x1, y1 - 10), 
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 
                 # Store detection
                 detection_data = {
@@ -178,8 +178,8 @@ class VisionSystem:
                 x1, y1, x2, y2 = map(int, box)
                 track_id = track['track_id']
                 
-                cv2.putText(annotated_frame, f"T{track_id}", (x1, y2 + 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                # cv2.putText(annotated_frame, f"T{track_id}", (x1, y2 + 15),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
             
             return confirmed_tracks, annotated_frame
         else:

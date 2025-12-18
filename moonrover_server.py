@@ -142,7 +142,8 @@ def receive_telemetry():
             },
             'perception': {
                 'live_craters': live_craters,
-                'map_craters': map_status['craters']
+                'map_craters': map_status['craters'],
+                'resolution': [img.shape[1], img.shape[0]] if img is not None else [640, 640]
             }
         }
     

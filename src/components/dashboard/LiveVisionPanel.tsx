@@ -2,14 +2,18 @@ import { PanelWrapper } from './PanelWrapper';
 import { LiveBadge } from './LiveBadge';
 import { LiveCrater } from '@/types/telemetry';
 import { Camera, Target, Crosshair } from 'lucide-react';
+import { useState } from 'react';
 
 interface LiveVisionPanelProps {
   imageBase64: string | null;
   craters: LiveCrater[];
+  resolution: [number, number];
   isConnected: boolean;
 }
 
-export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisionPanelProps) {
+export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected }: LiveVisionPanelProps) {
+  const [hoveredCraterId, setHoveredCraterId] = useState<number | null>(null);
+
   return (
     <PanelWrapper 
       title="Live Vision Feed" 
@@ -17,8 +21,8 @@ export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisio
       className="h-full"
     >
       <div className="relative w-full h-full bg-space-black rounded overflow-hidden flex items-center justify-center">
-        {/* Video Feed Container - maintains 1:1 aspect ratio (416x416) */}
-        <div className="relative aspect-square h-full max-w-full">
+        {/* Video Feed Container - maintains 1:1 aspect ratio (416x416 typically) */}
+        <div className="relative aspect-square h-full max-w-full group">
           {/* Video Feed */}
           {imageBase64 ? (
             <img 
@@ -38,7 +42,70 @@ export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisio
             </div>
           )}
 
-          {/* Scanlines overlay */}
+          {/* Interactive Overlay Layer */}
+          {/* This layer sits exactly on top of the image */}
+          <div className="absolute inset-0">
+             {craters.map((crater, index) => {
+               // Calculate percentages based on backend resolution
+               // box: [x1, y1, x2, y2]
+               const [imgW, imgH] = resolution;
+               const [x1, y1, x2, y2] = crater.box;
+               
+               const left = (x1 / imgW) * 100;
+               const top = (y1 / imgH) * 100;
+               const width = ((x2 - x1) / imgW) * 100;
+               const height = ((y2 - y1) / imgH) * 100;
+               const id = crater.track_id ?? index;
+
+               return (
+                 <div
+                   key={`${id}-${index}`}
+                   className="absolute group/crater"
+                   style={{
+                     left: `${left}%`,
+                     top: `${top}%`,
+                     width: `${width}%`,
+                     height: `${height}%`,
+                     // Invisible by default, but blocks pointer events
+                     cursor: 'crosshair',
+                   }}
+                   onMouseEnter={() => setHoveredCraterId(id)}
+                   onMouseLeave={() => setHoveredCraterId(null)}
+                 >
+                   {/* Optional: Add a subtle highlight on hover to verify hit detection */}
+                   <div className="absolute inset-0 border border-primary/0 group-hover/crater:border-primary/50 transition-colors rounded-sm" />
+
+                   {/* Tooltip Card - Positions automatically */}
+                   <div className={`absolute left-1/2 -translate-x-1/2 -top-2 -translate-y-[100%] z-50 pointer-events-none transition-all duration-200 ${
+                     hoveredCraterId === id ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                   }`}>
+                     <div className="bg-space-black/95 backdrop-blur-md border border-primary/30 text-sm p-3 rounded-lg shadow-2xl shadow-primary/20 min-w-[180px]">
+                        <div className="flex items-center gap-3 mb-2 border-b border-white/10 pb-2">
+                          <span className="font-bold text-primary font-mono text-base">{crater.label?.toUpperCase() || 'UNKNOWN'}</span>
+                          <span className="text-xs text-muted-foreground font-mono ml-auto">ID:{id}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
+                          {/* Only show radius if NOT Alien */}
+                          {crater.label?.toLowerCase() !== 'alien' && (
+                            <>
+                              <span className="text-muted-foreground">RADIUS:</span>
+                              <span className="text-foreground text-right">{(crater.radius_m || 0).toFixed(2)}m</span>
+                            </>
+                          )}
+                          
+                          <span className="text-muted-foreground">DIST:</span>
+                          <span className="text-foreground text-right">{crater.depth.toFixed(2)}m</span>
+                        </div>
+                     </div>
+                     {/* Triangle pointer */}
+                     <div className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-full w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[8px] border-t-primary/30" />
+                   </div>
+                 </div>
+               );
+             })}
+          </div>
+
+          {/* Scanlines overlay same as before */}
           <div className="absolute inset-0 scanlines pointer-events-none" />
 
           {/* HUD Crosshair - Enhanced */}
@@ -79,8 +146,6 @@ export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisio
           <div className="absolute bottom-1/4 left-1/4 w-4 h-4 border border-primary/30 rounded-full" />
           <div className="absolute bottom-1/4 right-1/4 w-4 h-4 border border-primary/30 rounded-full" />
 
-          {/* Crater detection boxes removed - now drawn by backend segmentation */}
-
           {/* Scan Line Effect - Enhanced */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div 
@@ -97,7 +162,7 @@ export function LiveVisionPanel({ imageBase64, craters, isConnected }: LiveVisio
               <div className="flex items-center gap-3 text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <Crosshair className="w-3 h-3 text-primary" />
-                  416×416
+                  {resolution?.[0] || 416}×{resolution?.[1] || 416}
                 </span>
                 <span className="text-primary/80">YOLO-SEG</span>
               </div>

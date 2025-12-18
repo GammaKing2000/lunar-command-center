@@ -30,6 +30,7 @@ export interface MapCrater {
 export interface Perception {
   live_craters: LiveCrater[];
   map_craters: MapCrater[];
+  resolution?: [number, number];
 }
 
 export interface TelemetryPayload {
