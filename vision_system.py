@@ -171,7 +171,26 @@ class VisionSystem:
         # Run through tracker if available
         if self.tracker:
             confirmed_tracks = self.tracker.update(raw_detections)
-            
+            # --- 4. Sanitize for JSON (Remove Numpy Arrays) & Apply Classification ---
+            sanitized_tracks = []
+            for track in confirmed_tracks:
+                t = track.copy()
+                if 'contour' in t:
+                    del t['contour']  # Remove contour (numpy array) before sending to frontend
+                
+                # Apply Size Classification for Craters
+                # thresholds: small < 0.03m, 0.03 < medium < 0.055, large > 0.055
+                if t['label'] == 'crater':
+                    radius = t.get('radius_m', 0.0)
+                    if radius < 0.03:
+                        t['label'] = 'small crater'
+                    elif radius < 0.055:
+                        t['label'] = 'medium crater'
+                    else:
+                        t['label'] = 'large crater'
+
+                sanitized_tracks.append(t)
+                
             # Draw track IDs on confirmed tracks
             for track in confirmed_tracks:
                 box = track['box']
@@ -181,7 +200,7 @@ class VisionSystem:
                 # cv2.putText(annotated_frame, f"T{track_id}", (x1, y2 + 15),
                 #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
             
-            return confirmed_tracks, annotated_frame
+            return sanitized_tracks, annotated_frame
         else:
             return raw_detections, annotated_frame
     
