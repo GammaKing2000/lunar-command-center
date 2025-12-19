@@ -50,6 +50,14 @@ last_telemetry_time = time.time()
 yolo_frame_counter = 0
 cached_craters = []
 cached_annotated_b64 = None
+cached_raw_frame = None  # Store raw frame for capture endpoint
+
+# High-res capture state
+capture_pending = False
+capture_metadata = {}  # {"box": [...], "label": "..."}
+
+# Detections folder path (in public for frontend access)
+DETECTIONS_FOLDER = 'public/detections'
 
 @app.route('/')
 def index():
@@ -57,11 +65,19 @@ def index():
 
 @app.route('/jetson_command', methods=['GET'])
 def get_jetson_command():
+    global capture_pending
     cmd = request.args.get('racer')
     if cmd:
         web_command['racer'] = cmd
         logger.info(f"Command update: {cmd}")
-    return jsonify(web_command)
+    
+    # Include capture flag in response
+    response = dict(web_command)
+    if capture_pending:
+        response['capture'] = True
+        capture_pending = False  # Reset after sending
+    
+    return jsonify(response)
 
 @app.route('/display', methods=['POST'])
 def receive_telemetry():
@@ -88,7 +104,7 @@ def receive_telemetry():
             logger.error(f"Image Decode Error: {e}")
 
     # 2. Run Laptop-Side Perception
-    global yolo_frame_counter, cached_craters, cached_annotated_b64
+    global yolo_frame_counter, cached_craters, cached_annotated_b64, cached_raw_frame
     
     # A. Vision (Object Detection) - Run YOLO every 5th frame for performance
     live_craters = cached_craters
@@ -101,6 +117,7 @@ def receive_telemetry():
             # Run YOLO on this frame
             live_craters, annotated_frame = vision.process_frame(img)
             cached_craters = live_craters
+            cached_raw_frame = img.copy()  # Cache raw frame for capture
             
             # Re-encode annotated image for the Dashboard
             _, buf = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
@@ -143,7 +160,8 @@ def receive_telemetry():
             'perception': {
                 'live_craters': live_craters,
                 'map_craters': map_status['craters'],
-                'resolution': [img.shape[1], img.shape[0]] if img is not None else [640, 640]
+                'resolution': [img.shape[1], img.shape[0]] if img is not None else [640, 640],
+                'detection_files': sorted([f for f in os.listdir(DETECTIONS_FOLDER) if f.endswith('.jpg')], reverse=True)[:10] if os.path.exists(DETECTIONS_FOLDER) else []
             }
         }
     
@@ -206,6 +224,81 @@ def handle_reset_map(data):
     # Broadcast to all clients to clear their local history (trails, graphs)
     socketio.emit('map_reset') 
     print("Server: Map Reset Command Received & Broadcasted")
+
+@app.route('/capture', methods=['POST'])
+def capture_detection():
+    """Request a high-res capture from the rover"""
+    global capture_pending, capture_metadata
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': 'error', 'message': 'No JSON body'}), 400
+    
+    box = data.get('box')  # [x1, y1, x2, y2]
+    label = data.get('label', 'unknown')
+    
+    if not box or len(box) != 4:
+        return jsonify({'status': 'error', 'message': 'Invalid box'}), 400
+    
+    # Set pending flag for rover to pick up
+    capture_metadata = {'box': box, 'label': label}
+    capture_pending = True
+    logger.info(f"Capture requested for {label} at {box}")
+    
+    return jsonify({'status': 'pending', 'message': 'Capture request sent to rover'})
+
+@app.route('/hires_capture', methods=['POST'])
+def receive_hires_capture():
+    """Receive high-res capture from rover and save cropped ROI"""
+    global capture_metadata
+    
+    img_b64 = request.form.get('hires_image', '')
+    if not img_b64:
+        return jsonify({'status': 'error', 'message': 'No image data'}), 400
+    
+    try:
+        img_bytes = base64.b64decode(img_b64)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        hires_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    except Exception as e:
+        logger.error(f"HiRes Decode Error: {e}")
+        return jsonify({'status': 'error', 'message': 'Decode failed'}), 400
+    
+    # Get metadata
+    box = capture_metadata.get('box', [0, 0, 100, 100])
+    label = capture_metadata.get('label', 'unknown')
+    
+    # Scale box from 416x416 to high-res dimensions
+    h_hires, w_hires = hires_frame.shape[:2]
+    scale_x = w_hires / 416
+    scale_y = h_hires / 416
+    
+    x1 = int(box[0] * scale_x)
+    y1 = int(box[1] * scale_y)
+    x2 = int(box[2] * scale_x)
+    y2 = int(box[3] * scale_y)
+    
+    # Clamp
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(w_hires, x2), min(h_hires, y2)
+    
+    if x2 <= x1 or y2 <= y1:
+        return jsonify({'status': 'error', 'message': 'Invalid crop region'}), 400
+    
+    cropped = hires_frame[y1:y2, x1:x2]
+    
+    # Save
+    os.makedirs(DETECTIONS_FOLDER, exist_ok=True)
+    safe_label = label.replace(' ', '_').lower()
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    filename = f"{safe_label}_{timestamp}_hires.jpg"
+    filepath = os.path.join(DETECTIONS_FOLDER, filename)
+    
+    cv2.imwrite(filepath, cropped, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    logger.info(f"HiRes Captured: {filepath} ({cropped.shape[1]}x{cropped.shape[0]})")
+    
+    capture_metadata = {}  # Clear metadata
+    return jsonify({'status': 'ok', 'filename': filename})
 
 if __name__ == '__main__':
     # Run on 0.0.0.0 to be accessible from LAN

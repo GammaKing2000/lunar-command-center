@@ -1,6 +1,7 @@
 import { PanelWrapper } from './PanelWrapper';
 import { TelemetryGauge } from './TelemetryGauge';
 import { CraterSummary } from './CraterSummary';
+import { DetectionsGallery } from './DetectionsGallery';
 import { Gauge, Navigation, ArrowUp, ArrowDown, Circle } from 'lucide-react';
 import { MapCrater, LiveCrater, Pose } from '@/types/telemetry';
 
@@ -10,9 +11,10 @@ interface TelemetryDeckProps {
   mapCraters: MapCrater[];
   liveCraters: LiveCrater[];
   currentPose: Pose | null;
+  detectionFiles: string[];
 }
 
-export function TelemetryDeck({ throttle, steering, mapCraters, liveCraters, currentPose }: TelemetryDeckProps) {
+export function TelemetryDeck({ throttle, steering, mapCraters, liveCraters, currentPose, detectionFiles }: TelemetryDeckProps) {
   const throttleDirection = throttle > 0.1 ? 'FWD' : throttle < -0.1 ? 'REV' : 'IDLE';
   const steeringDirection = steering > 0.1 ? 'RIGHT' : steering < -0.1 ? 'LEFT' : 'CENTER';
   
@@ -121,6 +123,11 @@ export function TelemetryDeck({ throttle, steering, mapCraters, liveCraters, cur
           liveCraters={liveCraters}
           currentPose={currentPose} 
         />
+      </div>
+
+      {/* Detections Gallery */}
+      <div className="flex-1 min-h-0">
+        <DetectionsGallery files={detectionFiles} />
       </div>
     </div>
   );

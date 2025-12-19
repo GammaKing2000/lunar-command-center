@@ -13,6 +13,23 @@ interface LiveVisionPanelProps {
 
 export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected }: LiveVisionPanelProps) {
   const [hoveredCraterId, setHoveredCraterId] = useState<number | null>(null);
+  const [capturedId, setCapturedId] = useState<number | null>(null);
+
+  const handleCapture = async (crater: LiveCrater, id: number) => {
+    try {
+      const response = await fetch('http://localhost:8485/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ box: crater.box, label: crater.label || 'unknown' }),
+      });
+      if (response.ok) {
+        setCapturedId(id);
+        setTimeout(() => setCapturedId(null), 1000); // Flash green for 1s
+      }
+    } catch (error) {
+      console.error('Capture failed:', error);
+    }
+  };
 
   return (
     <PanelWrapper 
@@ -76,8 +93,8 @@ export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected 
                    <div className="absolute inset-0 border border-primary/0 group-hover/crater:border-primary/50 transition-colors rounded-sm" />
 
                    {/* Tooltip Card - Positions automatically */}
-                   <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none transition-all duration-200 ${
-                     hoveredCraterId === id ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+                   <div className={`absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 transition-all duration-200 ${
+                     hoveredCraterId === id ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
                    }`}>
                      <div className="bg-space-black/95 backdrop-blur-md border border-primary/30 text-sm p-3 rounded-lg shadow-2xl shadow-primary/20 min-w-[180px]">
                         <div className="flex items-center gap-3 mb-2 border-b border-white/10 pb-2">
@@ -104,6 +121,21 @@ export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected 
                           <span className="text-muted-foreground">DIST:</span>
                           <span className="text-foreground text-right">{crater.depth.toFixed(2)}m</span>
                         </div>
+                        {/* Capture Button */}
+                        <button
+                          className={`mt-3 w-full py-1.5 px-3 rounded-md flex items-center justify-center gap-2 text-xs font-mono transition-all pointer-events-auto ${
+                            capturedId === id
+                              ? 'bg-green-500 text-white'
+                              : 'bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCapture(crater, id);
+                          }}
+                        >
+                          <Camera className="w-3 h-3" />
+                          {capturedId === id ? 'CAPTURED!' : 'CAPTURE'}
+                        </button>
                      </div>
                      {/* Triangle pointer (Pointing Left) */}
                      <div className="absolute top-1/2 -translate-y-1/2 left-0 -translate-x-full w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-r-[8px] border-r-primary/30" />
@@ -172,7 +204,6 @@ export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected 
                   <Crosshair className="w-3 h-3 text-primary" />
                   {resolution?.[0] || 416}×{resolution?.[1] || 416}
                 </span>
-                <span className="text-primary/80">YOLO-SEG</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${

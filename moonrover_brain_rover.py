@@ -23,6 +23,8 @@ except ImportError:
 SERVER_IP = "192.168.1.8" 
 SERVER_URL = f"http://{SERVER_IP}:8485"
 API_TELEMETRY = f"{SERVER_URL}/display"
+API_COMMAND = f"{SERVER_URL}/jetson_command"
+API_HIRES_CAPTURE = f"{SERVER_URL}/hires_capture"
 
 # Driving Parameters
 SPD_NORMAL = 0.22      
@@ -83,10 +85,10 @@ class MoonRoverBrain:
         else:
             print("! NO GAMEPAD FOUND. Rover is immobile without gamepad.")
 
-        # 2. Setup Camera (Jetracer Config)
+        # 2. Setup Camera (Jetracer Config) - Output 720p, resize for streaming
         gst = ("nvarguscamerasrc sensor-id=0 ! "
                "video/x-raw(memory:NVMM),width=1280,height=720,framerate=30/1,format=NV12 ! "
-               "nvvidconv ! video/x-raw, width=416, height=416, format=BGRx ! "
+               "nvvidconv ! video/x-raw, width=1280, height=720, format=BGRx ! "
                "videoconvert ! video/x-raw,format=BGR ! "
                "appsink drop=true max-buffers=1")
         
@@ -94,6 +96,9 @@ class MoonRoverBrain:
         if not self.cam.isOpened():
              print("WARNING: GStreamer failed, failing back to V4L2")
              self.cam = cv2.VideoCapture(0)
+        
+        # Stream resolution (resize from 720p for bandwidth)
+        self.stream_size = (416, 416)
              
         # 3. State
         self.is_running = False
@@ -123,6 +128,25 @@ class MoonRoverBrain:
         self.throttle_val = throttle
         self.car.throttle = throttle  # No negation - negative values go forward
         self.car.steering = -steering
+    
+    def send_hires_capture(self, frame):
+        """Send a high-res frame to the server"""
+        try:
+            _, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            payload = {'hires_image': base64.b64encode(jpg).decode()}
+            requests.post(API_HIRES_CAPTURE, data=payload, timeout=2.0)
+            print(">> HiRes Capture Sent!")
+        except Exception as e:
+            print(f"HiRes Capture Error: {e}")
+    
+    def check_capture_command(self):
+        """Check if server requests a high-res capture"""
+        try:
+            resp = requests.get(API_COMMAND, timeout=0.1)
+            data = resp.json()
+            return data.get('capture', False)
+        except:
+            return False
 
     def run(self):
         print(">> Starting Main Loop...")
@@ -148,18 +172,25 @@ class MoonRoverBrain:
             
             frame_counter += 1
             
+            # --- 2.5 Check for Capture Command (every 10 frames to reduce overhead) ---
+            if frame_counter % 10 == 0:
+                if self.check_capture_command():
+                    self.send_hires_capture(frame)  # Send full 720p frame
+            
             # --- 3. Telemetry Streaming (Send to Laptop) ---
-            # Send every 3rd frame (approx 10 FPS) to save bandwidth/latency
+            # Resize to 416x416 for streaming
+            stream_frame = cv2.resize(frame, self.stream_size)
+            
+            # Send every frame
             if frame_counter % 1 == 0:
-                _, jpg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                _, jpg = cv2.imencode('.jpg', stream_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 
                 # Payload: Image + Rover State
-                # FIX: Send RAW gamepad steering, not servo output
                 payload = {
                     'img_base64': base64.b64encode(jpg).decode(),
                     'throttle': self.throttle_val,
-                    'steer_real': self.steering_raw,  # Now sending raw gamepad value (-1 to +1)
-                    'racer': 'run' # Keep alive status
+                    'steer_real': self.steering_raw,
+                    'racer': 'run'
                 }
                 self.telemetry.update(payload)
                 

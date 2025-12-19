@@ -12,6 +12,27 @@ except ImportError:
     HAS_TRACKER = False
     print("WARNING: object_tracker module not found, tracking disabled")
 
+# ============== CAMERA CALIBRATION ==============
+# Inverse Projective Model: distance = K / y_normalized
+# 
+# Camera Setup:
+#   - Height: 10cm above ground
+#   - Angle: 75° from ground (i.e., 15° below horizontal, looking mostly forward)
+#   - Lens: Slight fisheye effect (edges stretched)
+#
+# Geometry: For objects on the ground plane,
+#   K ≈ camera_height / tan(90° - camera_angle)
+#   K ≈ 0.10 / tan(15°) ≈ 0.37
+# 
+# Note: Fisheye causes objects near edges to appear further than center.
+#       Current model ignores this - for better accuracy, consider undistortion.
+CAMERA_HEIGHT_M = 0.10       # 10cm above ground
+CAMERA_ANGLE_DEG = 75        # Degrees from ground (shallow = looking forward)
+DEPTH_CALIBRATION_K = 0.185  # Empirically tuned (was 0.37, halved based on real measurements)
+MAX_DETECTION_DISTANCE = 5.0  # Clamp far objects (meters)
+MIN_DETECTION_DISTANCE = 0.05 # Clamp very close objects (meters)
+# ================================================
+
 class VisionSystem:
     def __init__(self, model_path='best_small.pt', device='cuda'):
         print(f">> Initializing Vision System with {model_path} on {device}...")
@@ -114,13 +135,14 @@ class VisionSystem:
                         y_max = int(mask_points[0].max())  # Maximum y = lowest on screen
                     
                     # === DEPTH ESTIMATION (from lowest mask point) ===
+                    # Using Inverse Projective Model: dist = K / y_norm
                     y_norm = y_max / h_img
                     if y_norm < 0.05:
-                        dist_m = 5.0
+                        dist_m = MAX_DETECTION_DISTANCE
                     else:
-                        dist_m = 0.175 / y_norm
+                        dist_m = DEPTH_CALIBRATION_K / y_norm
                     
-                    if dist_m < 0: dist_m = 0.1
+                    dist_m = max(MIN_DETECTION_DISTANCE, min(dist_m, MAX_DETECTION_DISTANCE))
                     
                     # === AREA in m² ===
                     # Approximate: area_m2 = area_px * (meters_per_pixel)^2
@@ -134,14 +156,14 @@ class VisionSystem:
                     radius_m = math.sqrt(area_m2 / math.pi) if area_m2 > 0 else 0.1
                     
                 else:
-                    # Fallback: use bounding box for depth (no box drawn)
+                    # Fallback: use bounding box for depth (no mask available)
                     y_norm = y2 / h_img
                     if y_norm < 0.05:
-                        dist_m = 5.0
+                        dist_m = MAX_DETECTION_DISTANCE
                     else:
-                        dist_m = 0.175 / y_norm
+                        dist_m = DEPTH_CALIBRATION_K / y_norm
                     
-                    if dist_m < 0: dist_m = 0.1
+                    dist_m = max(MIN_DETECTION_DISTANCE, min(dist_m, MAX_DETECTION_DISTANCE))
                 
                 # Draw label with depth info (DISABLED FOR INTERACTIVE UI)
                 # depth_str = f"{dist_m:.2f}m"

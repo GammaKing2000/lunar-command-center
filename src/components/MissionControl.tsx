@@ -82,6 +82,7 @@ export function MissionControl() {
               mapCraters={telemetry?.perception?.map_craters || []}
               liveCraters={telemetry?.perception?.live_craters || []}
               currentPose={telemetry?.telemetry?.pose || null}
+              detectionFiles={telemetry?.perception?.detection_files || []}
             />
           </div>
         </div>

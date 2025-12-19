@@ -31,6 +31,7 @@ export interface Perception {
   live_craters: LiveCrater[];
   map_craters: MapCrater[];
   resolution?: [number, number];
+  detection_files?: string[];
 }
 
 export interface TelemetryPayload {
