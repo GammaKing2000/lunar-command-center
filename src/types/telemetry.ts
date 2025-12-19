@@ -34,9 +34,31 @@ export interface Perception {
   detection_files?: string[];
 }
 
+export interface MissionStatus {
+  active: boolean;
+  task: string;
+  progress: number;
+  message: string;
+}
+
+export interface MissionReport {
+  id: string;
+  task: string;
+  startTime: Date;
+  endTime?: Date;
+  totalDistance: number;
+  findings: {
+    craters: number;
+    aliens: number;
+  };
+  snapshots: string[];
+  logs: string[];
+}
+
 export interface TelemetryPayload {
   step?: number;
   img_base64: string;
   telemetry: Telemetry;
   perception: Perception;
+  mission_status?: MissionStatus;
 }
