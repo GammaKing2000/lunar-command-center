@@ -155,7 +155,7 @@ export function MissionExecution({
               findings: serverReport.findings,
               detailed_findings: serverReport.detailed_findings, // Detailed findings with radius
               snapshots: serverReport.snapshots,
-              logs: serverReport.logs || logs.map(l => `[${l.time}] ${l.message}`),
+              logs: serverReport.logs || [],
               folder: serverReport.folder, // Mission folder for image paths
             };
             onComplete(report);
@@ -169,7 +169,7 @@ export function MissionExecution({
               totalDistance: targetDistance,
               findings,
               snapshots,
-              logs: logs.map(l => `[${l.time}] ${l.message}`),
+              logs: [],
             };
             onComplete(report);
           }
@@ -184,13 +184,14 @@ export function MissionExecution({
             totalDistance: targetDistance,
             findings,
             snapshots,
-            logs: logs.map(l => `[${l.time}] ${l.message}`),
+            logs: [],
           };
           onComplete(report);
         }
       }, 500); // 500ms delay to ensure server has saved the file
     }
-  }, [missionStatus?.message, task, startTime, targetDistance, findings, snapshots, logs, onComplete]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missionStatus?.message, missionStatus?.progress]);
 
   const handleAbort = async () => {
     try {

@@ -297,10 +297,38 @@ def receive_telemetry():
         web_command['racer'] = 'run'
 
         # D. Auto-Capture Logic
-        # Capture craters/aliens only once per track_id, at optimal distance (0.30-0.35m)
+        # Capture craters/aliens only once per track_id, at optimal distance (0.20-0.35m)
         global last_capture_time
         CAPTURE_MIN_DIST = 0.20  # meters
-        CAPTURE_MAX_DIST = 0.35  # meters
+        CAPTURE_MAX_DIST = 0.51  # meters
+        
+        # Log all detections during mission for debugging
+        mission_log_path = f"public/reports/{mission_manager.mission_folder}/mission_log.txt" if mission_manager.mission_folder else "mission_log.txt"
+        
+        if live_craters:
+            with open(mission_log_path, 'a') as mlog:
+                mlog.write(f"\n[{time.strftime('%H:%M:%S')}] Frame - Dist: {mission_manager.current_distance:.3f}m, Progress: {mission_manager.progress}%\n")
+                mlog.write(f"  Detections: {len(live_craters)}, Already Captured IDs: {mission_manager.captured_track_ids}\n")
+                
+                for i, target in enumerate(live_craters):
+                    track_id = target.get('track_id')
+                    depth = target.get('depth', 0.0)
+                    label = target.get('label', 'unknown')
+                    radius = target.get('radius_m', 0.0)
+                    
+                    mlog.write(f"  [{i}] ID:{track_id}, Label:{label}, Depth:{depth:.3f}m, Radius:{radius:.3f}m\n")
+                    
+                    # Check capture eligibility
+                    if track_id is None:
+                        mlog.write(f"      -> SKIP: No track_id\n")
+                    elif track_id in mission_manager.captured_track_ids:
+                        mlog.write(f"      -> SKIP: Already captured\n")
+                    elif depth < CAPTURE_MIN_DIST:
+                        mlog.write(f"      -> SKIP: Too close ({depth:.2f}m < {CAPTURE_MIN_DIST}m)\n")
+                    elif depth > CAPTURE_MAX_DIST:
+                        mlog.write(f"      -> SKIP: Too far ({depth:.2f}m > {CAPTURE_MAX_DIST}m)\n")
+                    else:
+                        mlog.write(f"      -> ELIGIBLE for capture!\n")
         
         if live_craters and cached_raw_frame is not None:
             for target in live_craters:
@@ -318,7 +346,14 @@ def receive_telemetry():
                     
                     if capture_success:
                         mission_manager.captured_track_ids.add(track_id)
+                        # Update message so frontend shows detection in logs
+                        mission_manager.message = f"Detected: {target['label']} at {depth:.2f}m"
                         logger.info(f"Auto-Capture: {target['label']} (ID:{track_id}, dist:{depth:.2f}m)")
+                        
+                        # Log capture to mission log
+                        with open(mission_log_path, 'a') as mlog:
+                            mlog.write(f"  *** CAPTURED: ID:{track_id}, {target['label']}, {depth:.2f}m ***\n")
+                        
                         break  # Only capture one per frame to avoid overload
 
     # 3. Update State for Frontend
@@ -564,13 +599,28 @@ def process_server_capture(frame, metadata):
         x1, y1, x2, y2 = box
         h, w = frame.shape[:2]
         
-        # Clamp
-        x1, y1 = max(0, int(x1)), max(0, int(y1))
-        x2, y2 = min(w, int(x2)), min(h, int(y2))
+        # Calculate box dimensions
+        box_w = x2 - x1
+        box_h = y2 - y1
         
-        if x2 <= x1 or y2 <= y1: return False
+        # Expand by 10% on each side for more context
+        padding_x = box_w * 0.1
+        padding_y = box_h * 0.1
         
-        cropped = frame[y1:y2, x1:x2]
+        x1_expanded = x1 - padding_x
+        y1_expanded = y1 - padding_y
+        x2_expanded = x2 + padding_x
+        y2_expanded = y2 + padding_y
+        
+        # Clamp to frame boundaries
+        x1_final = max(0, int(x1_expanded))
+        y1_final = max(0, int(y1_expanded))
+        x2_final = min(w, int(x2_expanded))
+        y2_final = min(h, int(y2_expanded))
+        
+        if x2_final <= x1_final or y2_final <= y1_final: return False
+        
+        cropped = frame[y1_final:y2_final, x1_final:x2_final]
         
         # Determine save folder
         if mission_manager.active and mission_manager.mission_folder:

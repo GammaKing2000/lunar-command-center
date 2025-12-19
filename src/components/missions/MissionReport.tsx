@@ -1,6 +1,7 @@
-import { CheckCircle, Download, ArrowLeft, Clock, Route, Target, Camera, Box, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, Download, ArrowLeft, Clock, Route, Target, Camera, Box, AlertCircle, X } from 'lucide-react';
 import { PanelWrapper } from '@/components/dashboard/PanelWrapper';
-import type { MissionReport as MissionReportType } from '@/types/telemetry';
+import type { MissionReport as MissionReportType, DetailedFinding } from '@/types/telemetry';
 
 interface MissionReportProps {
   report: MissionReportType & { folder?: string };
@@ -8,6 +9,8 @@ interface MissionReportProps {
 }
 
 export function MissionReport({ report, onReturn }: MissionReportProps) {
+  const [selectedFinding, setSelectedFinding] = useState<DetailedFinding | null>(null);
+  
   const duration = report.endTime 
     ? Math.round((report.endTime.getTime() - report.startTime.getTime()) / 1000)
     : 0;
@@ -64,7 +67,7 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
             </div>
             <span className="text-xs text-muted-foreground font-mono">DISTANCE</span>
           </div>
-          <p className="text-3xl font-mono font-bold text-foreground">{report.totalDistance}<span className="text-lg text-muted-foreground">cm</span></p>
+          <p className="text-3xl font-mono font-bold text-foreground">{report.totalDistance.toFixed(3)}<span className="text-lg text-muted-foreground">cm</span></p>
         </div>
         
         <div className="p-4 rounded-xl bg-card/50 border border-border/30 backdrop-blur-sm">
@@ -112,14 +115,15 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
                   return (
                     <div 
                       key={i}
-                      className="flex gap-4 p-3 rounded-lg bg-card/50 border border-border/30 hover:border-primary/50 transition-colors"
+                      className="flex gap-4 p-3 rounded-lg bg-card/50 border border-border/30 hover:border-primary/50 transition-colors cursor-pointer"
+                      onClick={() => setSelectedFinding(finding)}
                     >
                       {/* Thumbnail */}
                       <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/30">
                         <img 
                           src={`/detections/${report.folder || ''}/${finding.snapshot}`}
                           alt={finding.type}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover hover:scale-110 transition-transform"
                         />
                       </div>
                       
@@ -232,6 +236,55 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
           ))}
         </div>
       </PanelWrapper>
+
+      {/* Image Overlay Modal */}
+      {selectedFinding && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setSelectedFinding(null)}
+        >
+          <div 
+            className="relative max-w-[90vw] max-h-[90vh] bg-space-black border border-primary/30 rounded-lg overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button 
+              className="absolute top-3 right-3 z-10 p-2 bg-black/60 hover:bg-primary/20 rounded-full border border-primary/30 transition-colors"
+              onClick={() => setSelectedFinding(null)}
+            >
+              <X className="w-5 h-5 text-primary" />
+            </button>
+            
+            {/* Image */}
+            <img 
+              src={`/detections/${report.folder || ''}/${selectedFinding.snapshot}`}
+              alt={selectedFinding.type}
+              className="max-w-[90vw] max-h-[80vh] min-w-[400px] min-h-[400px] object-contain"
+              style={{ imageRendering: 'auto' }}
+            />
+            
+            {/* Info Footer */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className={`px-2 py-1 rounded text-sm font-mono font-bold uppercase ${
+                    selectedFinding.type.toLowerCase().includes('alien')
+                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                      : 'bg-destructive/20 text-destructive border border-destructive/30'
+                  }`}>
+                    {selectedFinding.type}
+                  </span>
+                </div>
+                {selectedFinding.radius_m > 0 && (
+                  <div className="text-sm font-mono text-primary">
+                    Radius: {(selectedFinding.radius_m * 100).toFixed(1)}cm
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

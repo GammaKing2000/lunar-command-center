@@ -112,7 +112,7 @@ export function CraterSummary({ liveCraters = [] }: CraterSummaryProps) {
             )}
 
             {/* Crater List */}
-            <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto space-y-1 scrollbar-thin max-h-[150px]">
               {sortedCraters.map((crater, index) => (
                 <div 
                   key={`${crater.id}-${index}`}

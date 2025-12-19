@@ -80,7 +80,8 @@ export function DetectionsGallery({ files }: DetectionsGalleryProps) {
             <img 
               src={`/detections/${selectedImage}`}
               alt={selectedImage}
-              className="max-w-[90vw] max-h-[85vh] object-contain"
+              className="max-w-[90vw] max-h-[85vh] min-w-[400px] min-h-[400px] object-contain"
+              style={{ imageRendering: 'auto' }}
             />
             
             {/* Filename Footer */}
