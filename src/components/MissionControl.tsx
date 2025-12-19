@@ -20,7 +20,7 @@ export function MissionControl() {
   };
 
   return (
-    <div className="min-h-screen bg-background grid-bg p-4 lg:p-6">
+    <div className="p-4 lg:p-6 h-[calc(100vh-40px)] overflow-auto">
       <div className="max-w-[1800px] mx-auto space-y-4">
         {/* Header with Extra Controls */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -63,7 +63,7 @@ export function MissionControl() {
         />
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-180px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-230px)]">
           {/* Left Column - Live Vision */}
           <div className="lg:col-span-3 h-full">
             <LiveVisionPanel
