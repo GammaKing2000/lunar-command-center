@@ -3,7 +3,7 @@ import { PanelWrapper } from '@/components/dashboard/PanelWrapper';
 import type { MissionReport as MissionReportType } from '@/types/telemetry';
 
 interface MissionReportProps {
-  report: MissionReportType;
+  report: MissionReportType & { folder?: string };
   onReturn: () => void;
 }
 
@@ -102,8 +102,66 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Findings Gallery */}
         <PanelWrapper title="Detection Gallery" badge={<Camera className="w-4 h-4 text-primary" />}>
-          <div className="p-4">
-            {report.snapshots.length > 0 ? (
+          <div className="p-4 max-h-[400px] overflow-y-auto">
+            {(report.detailed_findings && report.detailed_findings.length > 0) ? (
+              <div className="space-y-3">
+                {report.detailed_findings.map((finding, i) => {
+                  const isAlien = finding.type.toLowerCase().includes('alien');
+                  const isCrater = finding.type.toLowerCase().includes('crater');
+                  
+                  return (
+                    <div 
+                      key={i}
+                      className="flex gap-4 p-3 rounded-lg bg-card/50 border border-border/30 hover:border-primary/50 transition-colors"
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-border/50 bg-muted/30">
+                        <img 
+                          src={`/detections/${report.folder || ''}/${finding.snapshot}`}
+                          alt={finding.type}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      
+                      {/* Details */}
+                      <div className="flex-1 flex flex-col justify-center">
+                        {/* Type Badge */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold uppercase ${
+                            isAlien 
+                              ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                              : 'bg-destructive/20 text-destructive border border-destructive/30'
+                          }`}>
+                            {finding.type}
+                          </span>
+                        </div>
+                        
+                        {/* Crater-specific info */}
+                        {isCrater && finding.radius_m > 0 && (
+                          <div className="flex items-center gap-4 text-sm font-mono">
+                            <div>
+                              <span className="text-muted-foreground">Radius: </span>
+                              <span className="text-primary font-bold">{(finding.radius_m * 100).toFixed(1)}cm</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Est. Diameter: </span>
+                              <span className="text-primary font-bold">{(finding.radius_m * 200).toFixed(1)}cm</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Alien info */}
+                        {isAlien && (
+                          <p className="text-sm text-muted-foreground font-mono">
+                            Alien specimen detected
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : report.snapshots.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {report.snapshots.map((snapshot, i) => (
                   <div 
@@ -111,7 +169,7 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
                     className="aspect-square rounded-lg overflow-hidden border border-border/30 bg-card/30 hover:border-primary/50 transition-colors cursor-pointer group"
                   >
                     <img 
-                      src={snapshot.startsWith('data:') ? snapshot : `/detections/${snapshot}`}
+                      src={snapshot.startsWith('data:') ? snapshot : `/detections/${report.folder || ''}/${snapshot}`}
                       alt={`Detection ${i + 1}`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />

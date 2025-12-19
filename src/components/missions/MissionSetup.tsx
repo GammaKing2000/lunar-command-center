@@ -11,15 +11,25 @@ interface MissionSetupProps {
 export function MissionSetup({ onStartMission, isConnected }: MissionSetupProps) {
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [distance, setDistance] = useState<number>(100);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleExecute = () => {
-    if (selectedTask && distance > 0) {
-      // Emit mission start to backend
-      socket.emit('start_mission', { 
-        task: selectedTask, 
-        distance_cm: distance 
-      });
-      onStartMission(selectedTask, distance);
+  const handleExecute = async () => {
+    if (selectedTask && distance > 0 && !isSubmitting) {
+      setIsSubmitting(true);
+      try {
+        await fetch('http://localhost:8485/mission/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            distance_cm: distance,
+            task: selectedTask 
+          }),
+        });
+        onStartMission(selectedTask, distance);
+      } catch (error) {
+        console.error('Failed to start mission:', error);
+        setIsSubmitting(false); // Only reset on error, otherwise we unmount/transition
+      }
     }
   };
 
@@ -147,14 +157,19 @@ export function MissionSetup({ onStartMission, isConnected }: MissionSetupProps)
                 {/* Execute Button */}
                 <button
                   onClick={handleExecute}
-                  disabled={!isConnected}
+                  disabled={!isConnected || isSubmitting}
                   className={`w-full py-4 rounded-lg font-display font-bold tracking-wider text-lg transition-all duration-300 ${
-                    isConnected
+                    isConnected && !isSubmitting
                       ? 'bg-warning hover:bg-warning/90 text-warning-foreground shadow-[0_0_30px_-5px_hsl(var(--warning)/0.5)] hover:shadow-[0_0_40px_-5px_hsl(var(--warning)/0.7)]'
                       : 'bg-muted/30 text-muted-foreground cursor-not-allowed'
                   }`}
                 >
-                  {isConnected ? (
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                       <Rocket className="w-5 h-5 animate-spin" />
+                       INITIATING...
+                    </span>
+                  ) : isConnected ? (
                     <span className="flex items-center justify-center gap-2">
                       <Rocket className="w-5 h-5" />
                       EXECUTE MISSION

@@ -101,8 +101,12 @@ class MoonRoverBrain:
         self.stream_size = (416, 416)
              
         # 3. State
+        # 3. State
         self.is_running = False
         self.throttle_val = 0.0
+        self.steering_raw = 0.0
+        self.server_throttle = 0.0
+        self.server_steering = 0.0
         
         atexit.register(self.cleanup)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -139,13 +143,21 @@ class MoonRoverBrain:
         except Exception as e:
             print(f"HiRes Capture Error: {e}")
     
-    def check_capture_command(self):
-        """Check if server requests a high-res capture"""
+    def update_server_command(self):
+        """Check for server commands (driving + capture)"""
         try:
             resp = requests.get(API_COMMAND, timeout=0.1)
             data = resp.json()
+            
+            # Update driving command
+            self.server_throttle = float(data.get('throttle', 0.0))
+            self.server_steering = float(data.get('steering', 0.0))
+            
             return data.get('capture', False)
         except:
+            # Failsafe: Stop rover if communication is lost
+            self.server_throttle = 0.0
+            self.server_steering = 0.0
             return False
 
     def run(self):
@@ -155,27 +167,34 @@ class MoonRoverBrain:
         frame_counter = 0
         
         while self.is_running:
-            # --- 1. Driving (Priority: Gamepad) ---
-            if self.gamepad:
-                g_throt, g_steer = self.gamepad.get_drive_command()
-                self.set_drive(g_throt, g_steer)
-                self.steering_raw = g_steer  # Store RAW gamepad value for telemetry
-            else:
-                self.set_drive(0, 0) # Safety stop if no gamepad logic
-                self.steering_raw = 0.0
-
-            # --- 2. Perceptions (Camera) ---
+            # --- 1. Perceptions (Camera) ---
             ret, frame = self.cam.read()
             if not ret:
                 time.sleep(0.1)
                 continue
             
             frame_counter += 1
-            
-            # --- 2.5 Check for Capture Command (every 10 frames to reduce overhead) ---
-            if frame_counter % 10 == 0:
-                if self.check_capture_command():
-                    self.send_hires_capture(frame)  # Send full 720p frame
+
+            # --- 2. Update Remote Command (Server) ---
+            if frame_counter % 5 == 0: # Check every 5 frames (~6Hz)
+                if self.update_server_command():
+                    self.send_hires_capture(frame)
+
+            # --- 3. Driving Logic ---
+            # Priority: Server Mission > Gamepad
+            if abs(self.server_throttle) > 0.05 or abs(self.server_steering) > 0.05:
+                 # Server is commanding movement (Mission Mode)
+                 self.set_drive(self.server_throttle, self.server_steering)
+                 self.steering_raw = self.server_steering
+                 if frame_counter % 30 == 0: # Log less frequently
+                    print(f"Mission Control: Spd={self.server_throttle:.2f} Str={self.server_steering:.2f}")
+            elif self.gamepad:
+                g_throt, g_steer = self.gamepad.get_drive_command()
+                self.set_drive(g_throt, g_steer)
+                self.steering_raw = g_steer
+            else:
+                self.set_drive(0, 0)
+                self.steering_raw = 0.0
             
             # --- 3. Telemetry Streaming (Send to Laptop) ---
             # Resize to 416x416 for streaming

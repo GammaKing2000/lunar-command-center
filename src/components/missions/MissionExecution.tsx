@@ -32,17 +32,27 @@ export function MissionExecution({
   const isActive = missionStatus?.active ?? true;
   const statusMessage = missionStatus?.message ?? 'Initializing systems...';
 
-  // Add logs based on status changes
+  // Add logs based on status changes (Filtered)
   useEffect(() => {
     if (missionStatus?.message) {
+      // Don't log "Traversing..." updates to avoid spamming/lagging the UI
+      if (missionStatus.message.startsWith('Traversing...')) return;
+
       const now = new Date().toLocaleTimeString('en-US', { hour12: false });
-      setLogs(prev => [...prev.slice(-50), { 
-        time: now, 
-        message: missionStatus.message,
-        type: missionStatus.message.includes('Detected') ? 'success' 
-            : missionStatus.message.includes('Warning') ? 'warning' 
-            : 'info'
-      }]);
+      
+      // Prevent duplicate consecutive logs
+      setLogs(prev => {
+        const lastLog = prev[prev.length - 1];
+        if (lastLog?.message === missionStatus.message) return prev;
+        
+        return [...prev.slice(-50), { 
+          time: now, 
+          message: missionStatus.message,
+          type: missionStatus.message.includes('Detected') ? 'success' 
+              : missionStatus.message.includes('Warning') ? 'warning' 
+              : 'info'
+        }];
+      });
     }
   }, [missionStatus?.message]);
 
@@ -85,27 +95,112 @@ export function MissionExecution({
       onComplete(report);
     }
 
-    socket.on('mission_log', onMissionLog);
-    socket.on('detection', onDetection);
-    socket.on('mission_complete', onMissionComplete);
+    // socket.on('mission_log', onMissionLog);
+    // socket.on('detection', onDetection);
+    // socket.on('mission_complete', onMissionComplete);
 
-    // Initial log
+    return () => {
+      // socket.off('mission_log', onMissionLog);
+      // socket.off('detection', onDetection);
+      // socket.off('mission_complete', onMissionComplete);
+    };
+  }, [task, targetDistance, startTime, findings, snapshots, onComplete]); // Removed logs
+
+  // Initial Log only on mount
+  useEffect(() => {
     setLogs([{ 
       time: new Date().toLocaleTimeString('en-US', { hour12: false }), 
       message: `Mission "${task}" initiated. Target: ${targetDistance}cm`,
       type: 'info'
     }]);
+  }, []); // Run once on mount
 
-    return () => {
-      socket.off('mission_log', onMissionLog);
-      socket.off('detection', onDetection);
-      socket.off('mission_complete', onMissionComplete);
-    };
-  }, [task, targetDistance, startTime, findings, snapshots, logs, onComplete]);
+  // Check for completion via status prop
+  const completedRef = useRef(false);
+  const wasActiveRef = useRef(false);
+  
+  // Track if mission was ever active
+  useEffect(() => {
+    if (missionStatus?.active && missionStatus.progress > 0) {
+      wasActiveRef.current = true;
+    }
+  }, [missionStatus?.active, missionStatus?.progress]);
+  
+  useEffect(() => {
+    // Only trigger completion if:
+    // 1. Message is "Mission Complete"
+    // 2. Progress is 100%
+    // 3. Mission was active at some point during this component's lifecycle
+    // 4. Haven't already triggered completion
+    if (missionStatus?.message === "Mission Complete" && 
+        missionStatus?.progress === 100 &&
+        wasActiveRef.current &&
+        !completedRef.current) {
+      completedRef.current = true; // Prevent duplicate calls
+      
+      // Fetch the actual report from the server (with a small delay to ensure it's saved)
+      setTimeout(async () => {
+        try {
+          const response = await fetch('http://localhost:8485/mission/report');
+          const data = await response.json();
+          
+          if (data.status === 'ok' && data.report) {
+            const serverReport = data.report;
+            const report: MissionReport & { folder?: string } = {
+              id: serverReport.id,
+              task: serverReport.task,
+              startTime: new Date(serverReport.startTime * 1000), // Convert UNIX timestamp
+              endTime: new Date(serverReport.endTime * 1000),
+              totalDistance: serverReport.totalDistance * 100, // Convert m to cm
+              findings: serverReport.findings,
+              detailed_findings: serverReport.detailed_findings, // Detailed findings with radius
+              snapshots: serverReport.snapshots,
+              logs: serverReport.logs || logs.map(l => `[${l.time}] ${l.message}`),
+              folder: serverReport.folder, // Mission folder for image paths
+            };
+            onComplete(report);
+          } else {
+            // Fallback to local state
+            const report: MissionReport = {
+              id: `mission-${Date.now()}`,
+              task,
+              startTime,
+              endTime: new Date(),
+              totalDistance: targetDistance,
+              findings,
+              snapshots,
+              logs: logs.map(l => `[${l.time}] ${l.message}`),
+            };
+            onComplete(report);
+          }
+        } catch (error) {
+          console.error('Failed to fetch report:', error);
+          // Fallback to local state
+          const report: MissionReport = {
+            id: `mission-${Date.now()}`,
+            task,
+            startTime,
+            endTime: new Date(),
+            totalDistance: targetDistance,
+            findings,
+            snapshots,
+            logs: logs.map(l => `[${l.time}] ${l.message}`),
+          };
+          onComplete(report);
+        }
+      }, 500); // 500ms delay to ensure server has saved the file
+    }
+  }, [missionStatus?.message, task, startTime, targetDistance, findings, snapshots, logs, onComplete]);
 
-  const handleAbort = () => {
-    socket.emit('abort_mission', {});
-    onAbort();
+  const handleAbort = async () => {
+    try {
+      await fetch('http://localhost:8485/mission/stop', {
+        method: 'POST',
+      });
+      onAbort();
+    } catch (error) {
+      console.error('Failed to abort mission:', error);
+    }
   };
 
   return (

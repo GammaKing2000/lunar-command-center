@@ -41,6 +41,13 @@ export interface MissionStatus {
   message: string;
 }
 
+export interface DetailedFinding {
+  type: string;
+  radius_m: number;
+  timestamp: number;
+  snapshot: string;
+}
+
 export interface MissionReport {
   id: string;
   task: string;
@@ -51,6 +58,7 @@ export interface MissionReport {
     craters: number;
     aliens: number;
   };
+  detailed_findings?: DetailedFinding[];
   snapshots: string[];
   logs: string[];
 }
