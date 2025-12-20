@@ -13,10 +13,38 @@ import { socket } from '@/hooks/useTelemetry'; // Assume socket is exported or w
 export function MissionControl() {
   const { telemetry, isConnected, missionTime, positionHistory, depthHistory } = useTelemetry();
   const [kinematicsMode, setKinematicsMode] = useState<'jetracer' | 'ugv'>('jetracer');
+  const [moonyLoading, setMoonyLoading] = useState(false);
 
   const toggleKinematics = (mode: 'jetracer' | 'ugv') => {
     setKinematicsMode(mode);
     socket.emit('set_kinematics', { mode });
+  };
+
+  const handleMoonyClick = async () => {
+    setMoonyLoading(true);
+    try {
+      const pose = telemetry?.telemetry?.pose ?? { x: 0, y: 0, theta: 0 };
+      const craters =
+        telemetry?.perception?.map_craters ??
+        telemetry?.perception?.live_craters ??
+        [];
+
+      const res = await fetch('/chat/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pose, craters }),
+      });
+      const data = await res.json();
+      if (data?.status === 'ok') {
+        window.alert(`Moony — Decision: ${data.decision}\n\n${data.explanation}`);
+      } else {
+        window.alert(`Moony error: ${data?.message ?? 'unknown error'}`);
+      }
+    } catch (err: any) {
+      window.alert(`Moony request failed: ${err?.message ?? err}`);
+    } finally {
+      setMoonyLoading(false);
+    }
   };
 
   return (
@@ -44,16 +72,26 @@ export function MissionControl() {
                 </button>
              </div>
              
-             {/* Map Reset Button */}
-             <button
-                onClick={() => {
-                    console.log('Resetting Map...');
-                    socket.emit('reset_map', {});
-                }}
-                className="px-3 py-1 bg-destructive/20 hover:bg-destructive/40 text-destructive border border-destructive/50 rounded text-xs font-bold transition-colors"
-             >
-                RESET MAP
-             </button>
+             {/* Map Reset & Moony Button */}
+             <div className="flex items-center gap-2">
+               <button
+                  onClick={() => {
+                      console.log('Resetting Map...');
+                      socket.emit('reset_map', {});
+                  }}
+                  className="px-3 py-1 bg-destructive/20 hover:bg-destructive/40 text-destructive border border-destructive/50 rounded text-xs font-bold transition-colors"
+               >
+                  RESET MAP
+               </button>
+
+               <button
+                 onClick={handleMoonyClick}
+                 disabled={moonyLoading}
+                 className={`px-3 py-1 text-xs font-bold rounded transition-colors ${moonyLoading ? 'opacity-60 cursor-wait' : 'bg-amber-500 text-white hover:brightness-95'}`}
+               >
+                 {moonyLoading ? 'Moony...' : 'Moony'}
+               </button>
+             </div>
         </div>
 
         {/* Status Bar */}

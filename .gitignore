@@ -25,3 +25,5 @@ dist-ssr
 
 public/detections
 public/reports
+.env
+.env.local

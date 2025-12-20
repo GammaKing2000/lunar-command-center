@@ -9,6 +9,18 @@ from threading import Thread, Event, Lock
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from decision_system import DecisionSystem
+from chatbot_system import ChatbotSystem
+from llm_client import OpenAIClient
+
+from dotenv import load_dotenv
+
+load_dotenv()   # only if you use a .env file locally
+
+decision_engine = DecisionSystem()
+chatbot = ChatbotSystem(llm_client=OpenAIClient())
+
+
 
 # Import Smart Modules
 try:
@@ -57,6 +69,10 @@ cached_raw_frame = None  # Store raw frame for capture endpoint
 capture_pending = False
 capture_metadata = {}  # {"box": [...], "label": "..."}
 last_capture_time = 0.0 # Cooldown for auto-capture
+
+# Chatbot state
+last_chatbot_decision = None
+last_chatbot_explanation = ""
 
 # Mission State
 class MissionManager:
@@ -283,6 +299,26 @@ def receive_telemetry():
              mapper.update_craters(live_craters, w)
              
         map_status = mapper.get_status()
+        # Decide using decision engine
+        decision = decision_engine.decide(map_status['pose'], map_status['craters'])
+        # Get explanation (ChatbotSystem expects: explain(decision, pose, craters))
+        try:
+            mission_context = {
+                'active': mission_manager.active,
+                'task': mission_manager.task,
+                'progress': mission_manager.progress,
+                'current_distance': mission_manager.current_distance,
+                'target_distance': mission_manager.target_distance,
+                'findings': mission_manager.findings
+            }
+            explanation = chatbot.explain(decision, map_status['pose'], map_status['craters'], mission_context)
+        except Exception as e:
+            logger.error(f"Chatbot explain failed: {e}")
+            explanation = f"(explain unavailable)"
+
+        # UPDATE: Store for frontend
+        last_chatbot_decision = decision
+        last_chatbot_explanation = explanation
 
     # C. Mission Control Logic
     mission_cmd = {'throttle': 0, 'steering': 0}
@@ -378,6 +414,10 @@ def receive_telemetry():
                 'task': mission_manager.task,
                 'progress': mission_manager.progress,
                 'message': mission_manager.message
+            },
+            'chatbot': {
+                'decision': last_chatbot_decision,
+                'explanation': last_chatbot_explanation
             }
         }
     
@@ -587,6 +627,32 @@ def get_mission_report():
     except Exception as e:
         logger.error(f"Error fetching report: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/chat/explain', methods=['POST'])
+def chat_explain():
+    """Return an explanation from the chatbot for given or current state.
+    JSON body (optional): { "decision": "...", "pose": {...}, "craters": [...] }
+    If omitted, uses current server `shared_data` values.
+    """
+    data = request.get_json() or {}
+    decision = data.get('decision', last_chatbot_decision)
+    pose = data.get('pose', shared_data.get('telemetry', {}).get('pose', {'x':0,'y':0,'theta':0}))
+    craters = data.get('craters', shared_data.get('perception', {}).get('map_craters', []))
+    try:
+        explanation = chatbot.explain(decision, pose, craters)
+    except Exception as e:
+        logger.error(f"Chat explain error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify({'status': 'ok', 'decision': decision, 'explanation': explanation})
+
+@app.route('/chat/latest', methods=['GET'])
+def chat_latest():
+    """Return the most recent decision + explanation computed by the server."""
+    return jsonify({
+        'status': 'ok',
+        'decision': last_chatbot_decision,
+        'explanation': last_chatbot_explanation
+    })
 
 def process_server_capture(frame, metadata):
     """Save a crop from the given frame directly on the server."""
