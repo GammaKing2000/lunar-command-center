@@ -33,7 +33,7 @@ except ImportError:
     print("WARNING: gamepad_control_ugv module not found.")
 
 # --- Configuration ---
-SERVER_IP = "192.168.1.8"  # Laptop IP
+SERVER_IP = "192.168.0.102"  # Laptop IP
 SERVER_URL = f"http://{SERVER_IP}:8485"
 API_TELEMETRY = f"{SERVER_URL}/display"
 

@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Rocket, ArrowRight, Gauge, AlertTriangle, Radio } from 'lucide-react';
+import { Rocket, ArrowRight, Gauge, AlertTriangle, Radio, Database } from 'lucide-react';
 import { PanelWrapper } from '@/components/dashboard/PanelWrapper';
 import { socket } from '@/hooks/useTelemetry';
 
 interface MissionSetupProps {
   onStartMission: (task: string, distance: number) => void;
+  onShowHistory?: () => void;
   isConnected: boolean;
 }
 
-export function MissionSetup({ onStartMission, isConnected }: MissionSetupProps) {
+export function MissionSetup({ onStartMission, onShowHistory, isConnected }: MissionSetupProps) {
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [distance, setDistance] = useState<number>(100);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -50,11 +51,23 @@ export function MissionSetup({ onStartMission, isConnected }: MissionSetupProps)
           </div>
         </div>
         
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
-          <Radio className={`w-4 h-4 ${isConnected ? 'text-success' : 'text-destructive'}`} />
-          <span className="text-xs font-mono text-muted-foreground">
-            {isConnected ? 'ROVER ONLINE' : 'NO CONNECTION'}
-          </span>
+        <div className="flex items-center gap-3">
+            {onShowHistory && (
+                <button
+                onClick={onShowHistory}
+                className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/50 hover:bg-primary/20 hover:border-primary text-primary transition-all shadow-[0_0_10px_-3px_hsl(var(--primary)/0.3)] hover:shadow-[0_0_15px_-3px_hsl(var(--primary)/0.5)]"
+                >
+                <Database className="w-4 h-4" />
+                <span className="text-sm font-bold font-mono tracking-wide">MISSION LOGS</span>
+                </button>
+            )}
+            
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
+                <Radio className={`w-4 h-4 ${isConnected ? 'text-success' : 'text-destructive'}`} />
+                <span className="text-xs font-mono text-muted-foreground">
+                    {isConnected ? 'ROVER ONLINE' : 'NO CONNECTION'}
+                </span>
+            </div>
         </div>
       </div>
 

@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { CheckCircle, Download, ArrowLeft, Clock, Route, Target, Camera, Box, AlertCircle, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { CheckCircle, Download, ArrowLeft, Clock, Route, Target, Camera, Box, AlertCircle, X, Loader2, Play } from 'lucide-react';
 import { PanelWrapper } from '@/components/dashboard/PanelWrapper';
 import type { MissionReport as MissionReportType, DetailedFinding } from '@/types/telemetry';
+import { PointCloudViewer } from './PointCloudViewer';
+
 
 interface MissionReportProps {
   report: MissionReportType & { folder?: string };
@@ -191,38 +193,7 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
 
         {/* 3D Reconstruction Placeholder */}
         <PanelWrapper title="3D Surface Reconstruction" badge={<Box className="w-4 h-4 text-primary" />}>
-          <div className="p-4">
-            <div className="relative aspect-video rounded-lg bg-gradient-to-br from-card/50 to-muted/20 border border-dashed border-border/50 flex flex-col items-center justify-center overflow-hidden">
-              {/* Placeholder visualization */}
-              <div className="absolute inset-0 opacity-20">
-                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {/* Grid pattern */}
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <line 
-                      key={`v-${i}`}
-                      x1={i * 10} y1="0" x2={i * 10} y2="100"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="0.2"
-                    />
-                  ))}
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <line 
-                      key={`h-${i}`}
-                      x1="0" y1={i * 10} x2="100" y2={i * 10}
-                      stroke="hsl(var(--primary))"
-                      strokeWidth="0.2"
-                    />
-                  ))}
-                </svg>
-              </div>
-              
-              <Box className="w-16 h-16 text-primary/50 mb-4 animate-pulse" />
-              <p className="text-muted-foreground font-mono text-sm mb-2">Structure from Motion</p>
-              <span className="text-[10px] px-2 py-1 rounded bg-muted/30 text-muted-foreground font-mono">
-                COMING SOON
-              </span>
-            </div>
-          </div>
+           <ReconstructionPanel report={report} />
         </PanelWrapper>
       </div>
 
@@ -288,3 +259,158 @@ export function MissionReport({ report, onReturn }: MissionReportProps) {
     </div>
   );
 }
+
+function ReconstructionPanel({ report }: { report: MissionReportType & { folder?: string } }) {
+  const [status, setStatus] = useState<'idle' | 'started' | 'processing' | 'complete' | 'error'>('idle');
+  const [stage, setStage] = useState<string>('');
+  const [showViewer, setShowViewer] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Poll status
+  useEffect(() => {
+    if (!report.folder) return;
+    
+    const checkStatus = async () => {
+        try {
+            const res = await fetch(`http://localhost:8485/mission/reconstruction_status?mission_folder=${report.folder}`);
+            const data = await res.json();
+            
+            if (data.status === 'complete') {
+                setStatus('complete');
+            } else if (data.status === 'processing') {
+                setStatus('processing');
+                setStage(data.stage || 'processing');
+            } else if (data.status === 'error') {
+                setStatus('error');
+            }
+        } catch (e) {
+            console.error("Status check failed", e);
+        }
+    };
+    
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [report.folder]);
+
+  const startReconstruction = async () => {
+      if (!report.folder) return;
+      try {
+          setStatus('started');
+          const res = await fetch('http://localhost:8485/mission/reconstruct', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ mission_folder: report.folder })
+          });
+          const data = await res.json();
+          if (data.status === 'error') {
+              setStatus('error');
+              setError(data.message);
+          } else {
+              setStatus('processing');
+          }
+      } catch (e: any) {
+          setStatus('error');
+          setError(e.message);
+      }
+  };
+
+  if (showViewer && report.folder) {
+      // 3D Model URL (PLY point cloud from COLMAP)
+      const modelUrl = `http://localhost:8485/reports/${report.folder}/3d_model.ply`;
+      
+      return (
+          <div className="h-[400px] w-full bg-black rounded-lg relative group">
+              <PointCloudViewer url={modelUrl} />
+              <button 
+                  onClick={() => setShowViewer(false)}
+                  className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                  <X className="w-4 h-4" />
+              </button>
+          </div>
+      );
+  }
+
+  return (
+    <div className="p-6 flex flex-col items-center justify-center min-h-[300px] bg-card/30 rounded-lg">
+        {status === 'idle' && (
+            <div className="text-center space-y-4">
+                <Box className="w-16 h-16 text-primary/40 mx-auto" />
+                <div>
+                    <h3 className="text-lg font-bold font-display">Generate 3D Model</h3>
+                    <p className="text-sm text-muted-foreground font-mono max-w-xs mx-auto">
+                        Reconstruct the terrain using 3D Gaussian Splatting from captured imagery.
+                    </p>
+                </div>
+                <button 
+                    onClick={startReconstruction}
+                    className="flex items-center gap-2 px-6 py-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold font-mono transition-all shadow-lg shadow-primary/20"
+                >
+                    <Play className="w-4 h-4" />
+                    START PROCESSING
+                </button>
+            </div>
+        )}
+
+        {(status === 'started' || status === 'processing') && (
+            <div className="text-center space-y-4">
+                <div className="relative w-20 h-20 mx-auto">
+                    <div className="absolute inset-0 border-4 border-primary/20 rounded-full" />
+                    <div className="absolute inset-0 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    <Loader2 className="absolute inset-0 m-auto w-8 h-8 text-primary animate-pulse" />
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold font-display animate-pulse">Processing...</h3>
+                    <p className="text-sm text-muted-foreground font-mono uppercase tracking-wider">
+                        Stage: {stage || 'INITIALIZING'}
+                    </p>
+                </div>
+                <div className="w-64 h-2 bg-secondary rounded-full overflow-hidden">
+                    <div className="h-full bg-primary/50 w-full animate-progress-indeterminate" />
+                </div>
+            </div>
+        )}
+
+        {status === 'complete' && (
+             <div className="text-center space-y-4">
+                <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto border border-success/30">
+                    <CheckCircle className="w-10 h-10 text-success" />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold font-display text-success">Reconstruction Complete</h3>
+                    <p className="text-sm text-muted-foreground font-mono">
+                        3D Gaussian Splat model is ready for viewing.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => setShowViewer(true)}
+                    className="flex items-center gap-2 px-8 py-3 rounded-lg bg-success hover:bg-success/90 text-success-foreground font-bold font-mono transition-all shadow-lg shadow-success/20"
+                >
+                    <Box className="w-4 h-4" />
+                    VIEW 3D MODEL
+                </button>
+            </div>
+        )}
+
+        {status === 'error' && (
+             <div className="text-center space-y-4">
+                <AlertCircle className="w-16 h-16 text-destructive/50 mx-auto" />
+                <div>
+                    <h3 className="text-lg font-bold font-display text-destructive">Processing Failed</h3>
+                    <p className="text-sm text-muted-foreground font-mono max-w-xs mx-auto">
+                        {error || "An unknown error occurred during reconstruction."}
+                    </p>
+                </div>
+                 <button 
+                    onClick={() => setStatus('idle')}
+                    className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition-colors font-mono text-sm"
+                >
+                    TRY AGAIN
+                </button>
+            </div>
+        )}
+    </div>
+  );
+}
+

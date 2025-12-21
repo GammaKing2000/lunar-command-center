@@ -2,11 +2,13 @@ import os
 import json
 import logging
 import base64
+import subprocess
 import cv2
 import numpy as np
 import time
+import sys
 from threading import Thread, Event, Lock
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
@@ -126,7 +128,7 @@ class MissionManager:
         # 3. Control Logic (Linear Traverse)
         # Kickstart: heavier throttle for first 0.2s to overcome static friction
         elapsed = time.time() - self.start_time
-        throttle = -0.2 if elapsed < 0.2 else -0.17
+        throttle = -0.2 if elapsed < 0.4 else -0.16
         
         self.message = f"Traversing... {self.current_distance:.2f}m / {self.target_distance:.2f}m"
         return {'throttle': throttle, 'steering': 0} # Drive straight
@@ -200,6 +202,16 @@ DETECTIONS_FOLDER = 'public/detections'
 def index():
     return "Moon Rover Mission Control Server (BRAIN ACTIVE)"
 
+@app.route('/reports/<path:filename>')
+def serve_reports(filename):
+    from flask import send_from_directory
+    return send_from_directory('public/reports', filename)
+    
+@app.route('/detections/<path:filename>')
+def serve_detections(filename):
+    from flask import send_from_directory
+    return send_from_directory('public/detections', filename)
+
 @app.route('/jetson_command', methods=['GET'])
 def get_jetson_command():
     global capture_pending
@@ -213,61 +225,71 @@ def get_jetson_command():
     if capture_pending:
         response['capture'] = True
         capture_pending = False  # Reset after sending
+        
+    # Include mission status
+    response['mission_active'] = mission_manager.active
+    if mission_manager.active and mission_manager.mission_folder:
+        response['mission_folder'] = mission_manager.mission_folder
     
     return jsonify(response)
+
+@app.route('/video_feed')
+def video_feed():
+    """Video streaming route. Put this in the src attribute of an img tag."""
+    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def gen_frames():
+    """Generator function for MJPEG"""
+    global cached_annotated_b64
+    while True:
+        # We can reuse the cached annotated jpeg from the vision loop
+        if cached_annotated_b64_buffer:
+             yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + cached_annotated_b64_buffer + b'\r\n')
+        time.sleep(0.04) # Limit to 25 FPS stream
 
 @app.route('/display', methods=['POST'])
 def receive_telemetry():
     global step, shared_data, last_telemetry_time
-    global capture_pending, capture_metadata # Needed for auto-capture!
+    global cached_craters, cached_annotated_b64, cached_raw_frame, cached_annotated_b64_buffer
     
     current_time = time.time()
     dt = current_time - last_telemetry_time
     last_telemetry_time = current_time
     
-    # 1. Extract Raw Data from Rover
-    img_b64_raw = request.form.get('img_base64', '')
+    # 1. Extract Telemetry from Rover
     throttle = request.form.get('throttle', type=float, default=0.0)*(-1)
     steer_real = request.form.get('steer_real', type=float, default=0.0)
+    img_b64_raw = request.form.get('img_base64', '')
     
-    # Decode Image
-    img = None
+    # 2. Process Image if available (HTTP streaming mode)
     if img_b64_raw and vision:
         try:
-            # Fix padding if necessary (though usually standard b64 is fine)
-            img_bytes = base64.b64decode(img_b64_raw)
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        except Exception as e:
-            logger.error(f"Image Decode Error: {e}")
-
-    # 2. Run Laptop-Side Perception
-    global yolo_frame_counter, cached_craters, cached_annotated_b64, cached_raw_frame
-    
-    # A. Vision (Object Detection) - Run YOLO every 5th frame for performance
-    live_craters = cached_craters
-    annotated_b64 = img_b64_raw  # Default to raw image
-    
-    if img is not None:
-        yolo_frame_counter += 1
-        
-        if vision and yolo_frame_counter % 1 == 0:  # Real-time: every frame
-            # Run YOLO on this frame
-            live_craters, annotated_frame = vision.process_frame(img)
-            cached_craters = live_craters
-            cached_raw_frame = img.copy()  # Cache raw frame for capture
+            # Decode base64 image
+            img_data = base64.b64decode(img_b64_raw)
+            img_array = np.frombuffer(img_data, dtype=np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             
-            # Re-encode annotated image for the Dashboard
-            _, buf = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
-            cached_annotated_b64 = base64.b64encode(buf).decode()
-            annotated_b64 = cached_annotated_b64
-        elif cached_annotated_b64:
-            # Use cached YOLO output for non-YOLO frames
-            annotated_b64 = cached_annotated_b64
-        else:
-            # No YOLO yet, just send raw frame with minimal re-encode
-            _, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 60])
-            annotated_b64 = base64.b64encode(buf).decode()
+            if img is not None:
+                # Run YOLO Detection
+                live_craters, annotated_frame = vision.process_frame(img)
+                
+                cached_craters = live_craters
+                cached_raw_frame = img.copy()
+                
+                # Encode annotated frame for WebSocket broadcast
+                _, buf = cv2.imencode('.jpg', annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                cached_annotated_b64_buffer = buf.tobytes()
+                cached_annotated_b64 = base64.b64encode(buf).decode()
+                
+                # Auto-Capture during mission
+                if mission_manager.active:
+                    process_auto_capture(live_craters, img)
+        except Exception as e:
+            print(f"Image processing error: {e}")
+    
+    # B. Mapping (SLAM)
+    # (Same mapping logic as before)
 
     # B. Mapping (SLAM)
     map_status = {'pose': {'x':0,'y':0,'theta':0}, 'craters': []}
@@ -278,9 +300,12 @@ def receive_telemetry():
         
         # Update Map with new crater detections
         # Note: Vision returns 'box' and 'depth'. Mapper needs this.
-        if img is not None:
-             h, w = img.shape[:2]
-             mapper.update_craters(live_craters, w)
+        # Update Map with new crater detections
+        # Note: Vision returns 'box' and 'depth'. Mapper needs this.
+        # Use Cached Raw Frame (from continuous vision loop) which corresponds to live_craters
+        if cached_raw_frame is not None:
+             h, w = cached_raw_frame.shape[:2]
+             mapper.update_craters(cached_craters, w)
              
         map_status = mapper.get_status()
 
@@ -305,12 +330,12 @@ def receive_telemetry():
         # Log all detections during mission for debugging
         mission_log_path = f"public/reports/{mission_manager.mission_folder}/mission_log.txt" if mission_manager.mission_folder else "mission_log.txt"
         
-        if live_craters:
+        if cached_craters:
             with open(mission_log_path, 'a') as mlog:
                 mlog.write(f"\n[{time.strftime('%H:%M:%S')}] Frame - Dist: {mission_manager.current_distance:.3f}m, Progress: {mission_manager.progress}%\n")
-                mlog.write(f"  Detections: {len(live_craters)}, Already Captured IDs: {mission_manager.captured_track_ids}\n")
+                mlog.write(f"  Detections: {len(cached_craters)}, Already Captured IDs: {mission_manager.captured_track_ids}\n")
                 
-                for i, target in enumerate(live_craters):
+                for i, target in enumerate(cached_craters):
                     track_id = target.get('track_id')
                     depth = target.get('depth', 0.0)
                     label = target.get('label', 'unknown')
@@ -330,8 +355,8 @@ def receive_telemetry():
                     else:
                         mlog.write(f"      -> ELIGIBLE for capture!\n")
         
-        if live_craters and cached_raw_frame is not None:
-            for target in live_craters:
+        if cached_craters and cached_raw_frame is not None:
+            for target in cached_craters:
                 track_id = target.get('track_id')
                 depth = target.get('depth', 0.0)
                 
@@ -361,16 +386,16 @@ def receive_telemetry():
         step += 1
         shared_data = {
             'step': step,
-            'img_base64': annotated_b64, # Show the detections on the UI
+            'img_base64': cached_annotated_b64 if cached_annotated_b64 else "", # Show the detections on the UI
             'telemetry': {
                 'throttle': throttle,
                 'steering': steer_real,
                 'pose': map_status['pose']
             },
             'perception': {
-                'live_craters': live_craters,
+                'live_craters': cached_craters,
                 'map_craters': map_status['craters'],
-                'resolution': [img.shape[1], img.shape[0]] if img is not None else [640, 640],
+                'resolution': [cached_raw_frame.shape[1], cached_raw_frame.shape[0]] if cached_raw_frame is not None else [1280, 720],
                 'detection_files': sorted([f for f in os.listdir(DETECTIONS_FOLDER) if f.endswith('.jpg')], reverse=True)[:10] if os.path.exists(DETECTIONS_FOLDER) else []
             },
             'mission_status': {
@@ -383,6 +408,38 @@ def receive_telemetry():
     
     broadcast_event.set()
     return jsonify({'status': 'ok', 'command': web_command['racer']})
+
+cached_annotated_b64_buffer = None # Raw bytes for MJPEG
+
+def vision_processing_loop():
+    """Vision processing is now done in receive_telemetry for HTTP streaming mode.
+    This function is kept for backward compatibility but does nothing."""
+    print(">> Vision processing integrated into HTTP telemetry handler")
+
+
+def process_auto_capture(live_craters, frame):
+    """Check and perform auto-capture"""
+    CAPTURE_MIN_DIST = 0.20
+    CAPTURE_MAX_DIST = 0.51
+    
+    for target in live_craters:
+        track_id = target.get('track_id')
+        depth = target.get('depth', 0.0)
+        
+        if track_id is None or track_id in mission_manager.captured_track_ids:
+            continue
+            
+        if CAPTURE_MIN_DIST <= depth <= CAPTURE_MAX_DIST:
+             capture_success = process_server_capture(frame, target)
+             if capture_success:
+                 mission_manager.captured_track_ids.add(track_id)
+                 mission_manager.message = f"Detected: {target['label']} at {depth:.2f}m"
+                 logger.info(f"Auto-Capture: {target['label']} (ID:{track_id})")
+                 break
+
+# Start Background Threads
+vision_thread = Thread(target=vision_processing_loop, daemon=True)
+vision_thread.start()
 
 def broadcast_loop():
     global step_broadcast
@@ -400,7 +457,6 @@ def broadcast_loop():
             # Emit to frontend
             socketio.emit('telemetry_update', data_to_send)
 
-# Start Background Thread
 bg_thread = Thread(target=broadcast_loop, daemon=True)
 bg_thread.start()
 
@@ -558,35 +614,206 @@ def stop_mission():
 
 @app.route('/mission/report', methods=['GET'])
 def get_mission_report():
-    """Get the latest mission report JSON file"""
+    """Get a mission report JSON file. Defaults to latest, or specific folder if provided."""
     try:
         reports_dir = 'public/reports'
+        folder = request.args.get('folder')
+        
         if not os.path.exists(reports_dir):
             return jsonify({'status': 'error', 'message': 'No reports found'}), 404
-        
-        # Find folders (not files) sorted by modification time
-        folders = [f for f in os.listdir(reports_dir) if os.path.isdir(os.path.join(reports_dir, f))]
-        if not folders:
-            return jsonify({'status': 'error', 'message': 'No report folders found'}), 404
-        
-        # Sort by modification time (newest first)
-        folders.sort(key=lambda f: os.path.getmtime(os.path.join(reports_dir, f)), reverse=True)
-        latest_folder = folders[0]
-        
-        report_path = os.path.join(reports_dir, latest_folder, 'report.json')
-        if not os.path.exists(report_path):
-            return jsonify({'status': 'error', 'message': 'Report not found in folder'}), 404
-        
+            
+        if folder:
+            # Security check: prevent directory traversal
+            if '..' in folder or '/' in folder or '\\' in folder:
+                 return jsonify({'status': 'error', 'message': 'Invalid folder name'}), 400
+            
+            report_path = os.path.join(reports_dir, folder, 'report.json')
+            if not os.path.exists(report_path):
+                return jsonify({'status': 'error', 'message': 'Report not found'}), 404
+            
+            target_folder = folder
+        else:
+            # Find latest
+            folders = [f for f in os.listdir(reports_dir) if os.path.isdir(os.path.join(reports_dir, f))]
+            if not folders:
+                return jsonify({'status': 'error', 'message': 'No report folders found'}), 404
+            
+            # Sort by modification time (newest first)
+            folders.sort(key=lambda f: os.path.getmtime(os.path.join(reports_dir, f)), reverse=True)
+            target_folder = folders[0]
+            report_path = os.path.join(reports_dir, target_folder, 'report.json')
+            
         with open(report_path, 'r') as f:
             report_data = json.load(f)
         
         # Add folder info for frontend
-        report_data['folder'] = latest_folder
+        report_data['folder'] = target_folder
         
         return jsonify({'status': 'ok', 'report': report_data})
     except Exception as e:
         logger.error(f"Error fetching report: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/mission/history', methods=['GET'])
+def get_mission_history():
+    """Get list of all past missions with basic summary"""
+    try:
+        reports_dir = 'public/reports'
+        if not os.path.exists(reports_dir):
+             return jsonify({'status': 'ok', 'history': []})
+        
+        history = []
+        folders = [f for f in os.listdir(reports_dir) if os.path.isdir(os.path.join(reports_dir, f))]
+        
+        for folder in folders:
+            try:
+                report_path = os.path.join(reports_dir, folder, 'report.json')
+                if os.path.exists(report_path):
+                    with open(report_path, 'r') as f:
+                        data = json.load(f)
+                        
+                    # Extract summary data
+                    history.append({
+                        'id': data.get('id', folder),
+                        'folder': folder,
+                        'task': data.get('task', 'Unknown Mission'),
+                        'startTime': data.get('startTime', 0),
+                        'duration': data.get('endTime', 0) - data.get('startTime', 0),
+                        'distance': data.get('totalDistance', 0),
+                        'findings': data.get('findings', {'craters': 0, 'aliens': 0}),
+                        'snapshot_count': len(data.get('snapshots', []))
+                    })
+            except Exception as e:
+                logger.warning(f"Error reading report in {folder}: {e}")
+                continue
+        
+        # Sort by start time (newest first)
+        history.sort(key=lambda x: x['startTime'], reverse=True)
+        
+        return jsonify({'status': 'ok', 'history': history})
+    except Exception as e:
+        logger.error(f"Error fetching history: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/upload_sfm_data', methods=['POST'])
+def upload_sfm_data():
+    """Receive zipped mission frames for 3D reconstruction"""
+    import zipfile
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'status': 'error', 'message': 'No file part'}), 400
+            
+        file = request.files['file']
+        mission_folder = request.form.get('mission_folder')
+        
+        if not file or not mission_folder:
+            return jsonify({'status': 'error', 'message': 'Missing file or mission_folder'}), 400
+            
+        reports_dir = f'public/reports/{mission_folder}'
+        if not os.path.exists(reports_dir):
+             if '..' in mission_folder: return jsonify({'status': 'error', 'message': 'Invalid folder'}), 400
+             os.makedirs(reports_dir, exist_ok=True)
+            
+        # Save ZIP
+        zip_path = os.path.join(reports_dir, 'sfm_data.zip')
+        file.save(zip_path)
+        
+        # Extract
+        extract_path = os.path.join(reports_dir, 'sfm_data')
+        os.makedirs(extract_path, exist_ok=True)
+        
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_path)
+        
+        # Count extracted frames
+        frame_count = len([f for f in os.listdir(extract_path) if f.endswith(('.jpg', '.jpeg', '.png'))])
+        logger.info(f"SfM Data Received & Extracted: {extract_path} ({frame_count} frames)")
+        
+        # AUTO-TRIGGER: Start reconstruction immediately
+        if frame_count >= 4:
+            output_colmap = os.path.join(reports_dir, 'colmap_output')
+            output_model = os.path.join(reports_dir, '3d_model.ply')
+            
+            python_exe = sys.executable
+            # Chain: SfM -> PLY Export (replaced Gaussian Splatting)
+            cmd = f'"{python_exe}" sfm_processor.py "{extract_path}" "{output_colmap}" && "{python_exe}" ply_exporter.py "{output_colmap}" "{output_model}"'
+            
+            subprocess.Popen(cmd, shell=True)
+            logger.info(f">> AUTO-STARTED 3D Reconstruction for {mission_folder}")
+            print(f"\n{'='*60}")
+            print(f">> AUTO-STARTING 3D RECONSTRUCTION: {mission_folder}")
+            print(f"   Frames: {frame_count}")
+            print(f"{'='*60}\n")
+        else:
+            logger.warning(f"Not enough frames ({frame_count}) for reconstruction - need 4+")
+        
+        return jsonify({'status': 'ok', 'message': f'SFM Data Received ({frame_count} frames), reconstruction started'})
+    except Exception as e:
+        logger.error(f"SfM Upload Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/mission/reconstruct', methods=['POST'])
+def run_reconstruction():
+    """Trigger 3D reconstruction for a mission"""
+    import subprocess
+    
+    data = request.get_json()
+    mission_folder = data.get('mission_folder')
+    if not mission_folder:
+        return jsonify({'status': 'error', 'message': 'Missing mission_folder'}), 400
+        
+    reports_dir = f'public/reports/{mission_folder}'
+    frames_dir = os.path.join(reports_dir, 'sfm_data')
+    output_colmap = os.path.join(reports_dir, 'colmap_output')
+    output_model = os.path.join(reports_dir, '3d_model.ply')
+    
+    # Check if frames exist
+    if not os.path.exists(frames_dir) or not os.listdir(frames_dir):
+         return jsonify({'status': 'error', 'message': 'No frames found. Upload data first.'}), 400
+         
+    # Spawn background process
+    # Chain: SfM -> PLY Export (replaced Gaussian Splatting)
+    # Using python executable from current env
+    python_exe = sys.executable
+    cmd = f'"{python_exe}" sfm_processor.py "{frames_dir}" "{output_colmap}" && "{python_exe}" ply_exporter.py "{output_colmap}" "{output_model}"'
+    
+    # Use shell=True to allow && chaining
+    subprocess.Popen(cmd, shell=True)
+    
+    logger.info(f"Started reconstruction: {cmd}")
+    return jsonify({'status': 'started', 'message': 'Reconstruction started on GPU'})
+
+@app.route('/mission/reconstruction_status', methods=['GET'])
+def reconstruction_status():
+    mission_folder = request.args.get('mission_folder')
+    if not mission_folder:
+        return jsonify({'status': 'error', 'message': 'Missing mission_folder'}), 400
+        
+    reports_dir = f'public/reports/{mission_folder}'
+    
+    # Check for explicit failure
+    fail_path = os.path.join(reports_dir, 'reconstruction_failed.txt')
+    if os.path.exists(fail_path):
+        try:
+            with open(fail_path, 'r') as f:
+                reason = f.read().strip()
+        except:
+            reason = "Unknown error"
+        return jsonify({'status': 'failed', 'message': reason})
+    
+    model_path = os.path.join(reports_dir, '3d_model.splat')
+    
+    if os.path.exists(model_path):
+        return jsonify({'status': 'complete', 'message': 'Model ready'})
+    
+    # Check if process is running? Hard to obtain PID comfortably across requests without DB.
+    # Just check if colmap output exists as partial progress indicator.
+    colmap_path = os.path.join(reports_dir, 'colmap_output')
+    if os.path.exists(colmap_path):
+        return jsonify({'status': 'processing', 'stage': 'gaussian_splatting'})
+        
+    return jsonify({'status': 'processing', 'stage': 'sfm'})
 
 def process_server_capture(frame, metadata):
     """Save a crop from the given frame directly on the server."""

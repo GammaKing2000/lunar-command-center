@@ -41,12 +41,16 @@ export function LiveVisionPanel({ imageBase64, craters, resolution, isConnected 
         {/* Video Feed Container - maintains 1:1 aspect ratio (416x416 typically) */}
         <div className="relative aspect-square h-full max-w-full group">
           {/* Video Feed */}
-          {imageBase64 ? (
-            <img 
-              src={`data:image/jpeg;base64,${imageBase64}`}
-              alt="Rover Camera Feed"
-              className="w-full h-full object-contain"
-            />
+          {isConnected ? (
+             <img 
+               src="http://localhost:8485/video_feed"
+               alt="Rover Camera Feed"
+               className="w-full h-full object-contain"
+               onError={(e) => {
+                   // Fallback to base64 if stream fails (e.g. server restart)
+                   if (imageBase64) e.currentTarget.src = `data:image/jpeg;base64,${imageBase64}`;
+               }}
+             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-space-black">
               <div className="relative">
