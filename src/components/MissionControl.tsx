@@ -54,12 +54,52 @@ export function MissionControl() {
              >
                 RESET MAP
              </button>
+
+             {/* Auto-move Controls */}
+             <div className="flex items-center gap-1">
+                 <button
+                    onClick={async () => {
+                        try {
+                            const res = await fetch('http://localhost:8485/mission/start', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    type: 'rectangle',
+                                    save_report: false,
+                                    distance_cm: 0
+                                })
+                            });
+                            if (res.ok) console.log("Started Auto-move Mission");
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }}
+                    className="px-3 py-1 bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-400 border border-indigo-500/50 rounded-l text-xs font-bold transition-colors"
+                 >
+                    Auto-move
+                 </button>
+
+                 <button
+                    onClick={async () => {
+                        try {
+                            const res = await fetch('http://localhost:8485/mission/stop', { method: 'POST' });
+                            if (res.ok) console.log("Stopped Mission");
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }}
+                    className="px-3 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-500 border border-red-500/50 rounded-r text-xs font-bold transition-colors"
+                 >
+                    STOP
+                 </button>
+             </div>
         </div>
 
         {/* Status Bar */}
         <StatusBar 
           isConnected={isConnected} 
           step={telemetry?.step}
+          battery={telemetry?.telemetry?.battery_percent}
         />
 
         {/* Main Content Grid */}

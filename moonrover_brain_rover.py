@@ -20,7 +20,7 @@ except ImportError:
     print("WARNING: gamepad_control module not found.")
 
 # --- Configuration ---
-SERVER_IP = "192.168.0.102" 
+SERVER_IP = "172.20.10.8" 
 SERVER_URL = f"http://{SERVER_IP}:8485"
 API_TELEMETRY = f"{SERVER_URL}/display"
 API_COMMAND = f"{SERVER_URL}/jetson_command"
@@ -89,7 +89,7 @@ class MoonRoverBrain:
         # Pipeline: Argus -> Tee -> [Queue -> H.264 Enc -> RTP -> UDP Sink] 
         #                        -> [Queue -> AppSink (for OpenCV)]
         
-        # NOTE: 192.168.1.8 is the Server IP
+        # NOTE: 172.20.10.8 is the Server IP
         udp_port = 5000
         
         gst_pipeline = (

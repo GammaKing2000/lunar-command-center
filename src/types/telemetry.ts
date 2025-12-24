@@ -8,6 +8,8 @@ export interface Telemetry {
   throttle: number;
   steering: number;
   pose: Pose;
+  battery?: number;
+  battery_percent?: number;
 }
 
 export interface LiveCrater {

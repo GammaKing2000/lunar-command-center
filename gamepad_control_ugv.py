@@ -3,15 +3,16 @@ UGV Beast PT Gamepad Controller
 Waveshare UGV Beast PT with Jetson Orin Nano
 
 Controller Mapping:
-- Left Stick X/Y: Chassis movement (differential drive)
+- Left Stick X: Steering
+- R2 (RT): Throttle (Forward)
+- L2 (LT): Brake/Reverse
 - Right Stick X/Y: PTZ Camera Pan/Tilt
-- LT/RT: Speed limiter
 - D-Pad Up/Down: Main LED toggle
 - D-Pad Left/Right: Chassis LED toggle
 - A Button: Center PTZ
 - B Button: Emergency Stop
 - X Button: Auto-stabilize camera (toggle)
-- Y Button: Horn/Buzzer
+- Y Button: Custom Reset PTZ (-10, 0)
 
 Supports: XInput (Windows), direct /dev/input/js0 (Linux)
 """
@@ -49,18 +50,19 @@ class UGVGamepadController:
         self.left_wheel = 0.0  # -1.0 to 1.0
         self.right_wheel = 0.0
         
-        # PTZ state
-        self.pan_direction = 0   # -1 (left), 0 (stop), 1 (right)
-        self.tilt_direction = 0  # -1 (down), 0 (stop), 1 (up)
-        self.ptz_speed = 50      # 0-100
+        # PTZ state (Angle-based control)
+        self.ptz_pan_angle = 0.0    # Current target pan angle (-180 to +180)
+        self.ptz_tilt_angle = 0.0   # Current target tilt angle (-45 to +90)
+        self._ptz_changed = False    # Flag to track if PTZ needs update
         
         # Accessory state
         self.main_led = False
         self.chassis_led = False
         self.center_ptz = False  # One-shot trigger
+        self.custom_ptz_reset = False # One-shot trigger (Y button)
         self.emergency_stop = False
         self.stabilize_camera = False
-        self.horn = False
+        self.horn = False # Removed/Unused for now
         
         # Config
         self.deadzone = deadzone
@@ -96,7 +98,7 @@ class UGVGamepadController:
         self.running = True
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
-        print("[UGV Gamepad] Controller thread started")
+        print("[UGV Gamepad] Controller thread started (v1.2 Racing+Fallback)")
 
     def stop(self):
         self.running = False
@@ -106,14 +108,25 @@ class UGVGamepadController:
     def get_chassis_command(self):
         """
         Returns (left_speed, right_speed) in m/s
-        Uses differential drive: left stick controls arcade-style
+        Racing Style:
+        - R2 (RT): Accel/Forward
+        - L2 (LT): Brake/Reverse
+        - Left Stick X: Steering
         """
-        # Arcade drive mixing
-        forward = self._ly * self.max_speed * self.speed_multiplier
-        turn = self._lx * self.max_speed * self.speed_multiplier * 0.7
+        # Calculate net linear speed from triggers (0.0 to 1.0)
+        # RT is forward, LT is reverse
+        # INVERTED: Swap sign to fix direction
+        net_throttle = -(self._rt - self._lt)
         
-        left = forward + turn
-        right = forward - turn
+        # Base linear velocity
+        linear_v = net_throttle * self.max_speed
+        
+        # Steering from Left Stick X (-1.0 to 1.0)
+        # INVERTED: Swap sign to fix direction
+        turn_v = -self._lx * self.max_speed * 0.7
+        
+        left = linear_v + turn_v
+        right = linear_v - turn_v
         
         # Clamp to max speed
         left = max(-self.max_speed, min(self.max_speed, left))
@@ -121,30 +134,40 @@ class UGVGamepadController:
         
         return left, right
 
-    def get_ptz_command(self):
+    def get_ptz_angles(self):
         """
-        Returns (pan_dir, tilt_dir, speed)
-        pan_dir: -1 (left), 0 (stop), 1 (right)
-        tilt_dir: -1 (down), 0 (stop), 1 (up)
+        Returns (pan_angle, tilt_angle, changed)
+        Uses right stick to adjust PTZ angles incrementally.
+        pan_angle: -180 to +180
+        tilt_angle: -45 to +90
+        changed: True if angles changed since last call
         """
-        # Convert analog to direction
-        pan = 0
-        if self._rx > 0.5:
-            pan = 1
-        elif self._rx < -0.5:
-            pan = -1
-            
-        tilt = 0
-        if self._ry > 0.5:
-            tilt = 1
-        elif self._ry < -0.5:
-            tilt = -1
+        # Adjust angles based on stick position (degrees per call)
+        PAN_RATE = 2.0   # degrees per frame when stick is fully deflected
+        TILT_RATE = 1.5
         
-        # Speed based on stick magnitude
-        speed = int(max(abs(self._rx), abs(self._ry)) * 100)
-        speed = max(20, min(100, speed))  # Clamp 20-100
+        if abs(self._rx) > 0.2:
+            self.ptz_pan_angle += self._rx * PAN_RATE
+            self._ptz_changed = True
+        if abs(self._ry) > 0.2:
+            self.ptz_tilt_angle += self._ry * TILT_RATE
+            self._ptz_changed = True
         
-        return pan, tilt, speed
+        # Clamp to valid ranges
+        self.ptz_pan_angle = max(-180.0, min(180.0, self.ptz_pan_angle))
+        self.ptz_tilt_angle = max(-45.0, min(90.0, self.ptz_tilt_angle))
+        
+        # Return and reset changed flag
+        changed = self._ptz_changed
+        self._ptz_changed = False
+        
+        return self.ptz_pan_angle, self.ptz_tilt_angle, changed
+    
+    def reset_ptz_angles(self, pan=0.0, tilt=0.0):
+        """Reset PTZ angles to specific values"""
+        self.ptz_pan_angle = pan
+        self.ptz_tilt_angle = tilt
+        self._ptz_changed = True
 
     def get_led_state(self):
         """Returns (main_led_on, chassis_led_on)"""
@@ -156,75 +179,114 @@ class UGVGamepadController:
             self.center_ptz = False
             return True
         return False
+        
+    def should_reset_ptz_custom(self):
+        """Returns True once when Y button pressed (one-shot) to go to -10, 0"""
+        if self.custom_ptz_reset:
+            self.custom_ptz_reset = False
+            return True
+        return False
 
     def is_emergency_stop(self):
         """Returns True if B button held"""
         return self.emergency_stop
 
     def _run_loop(self):
-        if HAS_XINPUT:
-            self._run_xinput_loop()
-        elif HAS_INPUTS:
-            self._run_linux_loop()
+        # 1. Try 'inputs' library if available
+        if HAS_INPUTS:
+            self._run_inputs_loop()
         else:
-            print("[UGV Gamepad] ERROR: No gamepad library!")
+            # 2. Fallback to direct Linux file read
+            print("[UGV Gamepad] 'inputs' library not found. Trying direct /dev/input/js0...")
+            self._run_direct_joystick()
 
-    def _run_xinput_loop(self):
-        """XInput-based loop for Windows"""
+    def _run_inputs_loop(self):
+        """inputs library loop for Linux - with fallback to direct read"""
+        import os
+        
+        # Check if inputs library found the gamepad
+        try:
+            from inputs import devices
+            if devices.gamepads:
+                self._run_inputs_events()
+                return
+        except:
+            pass
+        
+        # Fallback: Direct joystick device read
+        if os.path.exists('/dev/input/js0'):
+            print("[UGV Gamepad] Fallback: Reading directly from /dev/input/js0")
+            self._run_direct_joystick() # Kept as legacy fallback just in case
+        else:
+            print("[UGV Gamepad] ERROR: No joystick device found!")
+
+    def _run_inputs_events(self):
+        """Read using inputs library (preferred for Linux)"""
+        from inputs import get_gamepad
         while self.running:
             try:
-                state = XInput.get_state(0)
-                gp = state.Gamepad
-                
-                # Sticks (normalized -1 to 1)
-                self._lx = self._apply_deadzone(gp.sThumbLX / 32767.0)
-                self._ly = self._apply_deadzone(gp.sThumbLY / 32767.0)
-                self._rx = self._apply_deadzone(gp.sThumbRX / 32767.0)
-                self._ry = self._apply_deadzone(gp.sThumbRY / 32767.0)
-                
-                # Triggers (normalized 0 to 1)
-                self._lt = gp.bLeftTrigger / 255.0
-                self._rt = gp.bRightTrigger / 255.0
-                
-                # Speed multiplier: RT = boost, LT = slow
-                self.speed_multiplier = 0.5 + (self._rt * 0.5) - (self._lt * 0.3)
-                self.speed_multiplier = max(0.2, min(1.0, self.speed_multiplier))
-                
-                # Buttons (using XInput button masks)
-                buttons = gp.wButtons
-                
-                # D-Pad toggle LEDs (edge detection)
-                if self._button_pressed(buttons, 0x0001):  # D-Pad Up
-                    self.main_led = not self.main_led
-                if self._button_pressed(buttons, 0x0002):  # D-Pad Down
-                    self.main_led = not self.main_led
-                if self._button_pressed(buttons, 0x0004):  # D-Pad Left
-                    self.chassis_led = not self.chassis_led
-                if self._button_pressed(buttons, 0x0008):  # D-Pad Right
-                    self.chassis_led = not self.chassis_led
-                
-                # A Button = Center PTZ
-                if self._button_pressed(buttons, 0x1000):
-                    self.center_ptz = True
-                
-                # B Button = Emergency Stop (held)
-                self.emergency_stop = bool(buttons & 0x2000)
-                
-                # X Button = Toggle stabilization
-                if self._button_pressed(buttons, 0x4000):
-                    self.stabilize_camera = not self.stabilize_camera
-                
-                # Y Button = Horn (held)
-                self.horn = bool(buttons & 0x8000)
-                
-                self._prev_buttons = buttons
-                time.sleep(0.02)
-                
+                events = get_gamepad()
+                for event in events:
+                    self._process_inputs_event(event)
             except Exception as e:
                 time.sleep(0.5)
 
-    def _run_linux_loop(self):
-        """Direct joystick read for Linux"""
+    def _process_inputs_event(self, event):
+        """Process a single event from inputs library"""
+        MAX_ABS = 32767.0
+        MAX_TRIG = 255.0
+        
+        # Map event codes to our internal state
+        if event.code == 'ABS_X':
+            self._lx = self._apply_deadzone(event.state / MAX_ABS)
+        elif event.code == 'ABS_Y':
+            self._ly = self._apply_deadzone(-event.state / MAX_ABS) # Inverted
+        elif event.code == 'ABS_RX':
+            self._rx = self._apply_deadzone(event.state / MAX_ABS)
+        elif event.code == 'ABS_RY':
+            self._ry = self._apply_deadzone(-event.state / MAX_ABS) # Inverted
+        elif event.code == 'ABS_Z':
+            self._lt = event.state / MAX_TRIG
+        elif event.code == 'ABS_RZ':
+            self._rt = event.state / MAX_TRIG
+        elif event.code.startswith('BTN_'):
+            # Handle buttons
+            # We need to map inputs' button names to our logic
+            # This is tricky as 'inputs' returns names like BTN_SOUTH (A), BTN_EAST (B) etc.
+            # simpler approach: just map standard codes if possible, or use the direct struct fallback 
+            # if we want exact 1:1 with previous logic.
+            # However, the user specifically asked to use the method from rover.py
+            # Rover.py ONLY handles axes in _process_inputs_event (lines 180-188). 
+            # It seems the Rover script doesn't handle buttons via 'inputs' lib? 
+            # Wait, let me check rover.py again. 
+            # Rover.py lines 180-188 only handle ABS_X, ABS_Y, ABS_Z, ABS_RZ.
+            
+            # Since UGV needs buttons (A, B, X, Y, D-Pad), we must implement button handling here too.
+            val = event.state
+            if event.code == 'BTN_SOUTH': # A
+                if val: self.center_ptz = True
+            elif event.code == 'BTN_EAST': # B
+                self.emergency_stop = bool(val)
+            elif event.code == 'BTN_NORTH': # X
+                if val: self.stabilize_camera = not self.stabilize_camera
+            elif event.code == 'BTN_WEST': # Y
+                if val: self.custom_ptz_reset = True
+            
+            # D-Pad is often ABS_HAT0X / ABS_HAT0Y in 'inputs' lib
+            elif event.code == 'ABS_HAT0Y':
+                if event.state == -1: self.main_led = not self.main_led # Up
+                elif event.state == 1: self.main_led = not self.main_led # Down
+            elif event.code == 'ABS_HAT0X':
+                if event.state == -1: self.chassis_led = not self.chassis_led # Left
+                elif event.state == 1: self.chassis_led = not self.chassis_led # Right
+            else:
+                # Debug: Print unhandled events to find D-Pad codes
+                if event.ev_type != 'Sync': # Ignore sync events
+                    print(f"[Debug] Unknown Event: Code={event.code}, State={event.state}, Type={event.ev_type}")
+
+    def _run_direct_joystick(self):
+        """Direct joystick read for Linux (Fallback/Legacy)"""
+        # This is the original _run_linux_loop renamed
         import os
         import struct
         
@@ -238,6 +300,7 @@ class UGVGamepadController:
         
         try:
             with open('/dev/input/js0', 'rb') as js:
+                print(f"[UGV Gamepad] Successfully opened /dev/input/js0")
                 while self.running:
                     event = js.read(JS_EVENT_SIZE)
                     if event:
@@ -258,20 +321,14 @@ class UGVGamepadController:
                                 self._lt = (normalized + 1.0) / 2.0
                             elif number == 5:  # Right Trigger
                                 self._rt = (normalized + 1.0) / 2.0
-                                
-                            # Update speed multiplier
-                            self.speed_multiplier = 0.5 + (self._rt * 0.5) - (self._lt * 0.3)
-                            self.speed_multiplier = max(0.2, min(1.0, self.speed_multiplier))
                         
                         elif ev_type & JS_EVENT_BUTTON:
-                            btn_name = f"btn_{number}"
-                            was_pressed = self._buttons.get(btn_name, 0)
-                            self._buttons[btn_name] = value
-                            
                             # Edge detection (button just pressed)
-                            if value == 1 and was_pressed == 0:
+                            if value == 1:
                                 if number == 0:  # A
                                     self.center_ptz = True
+                                elif number == 3:  # Y
+                                    self.custom_ptz_reset = True
                                 elif number == 2:  # X
                                     self.stabilize_camera = not self.stabilize_camera
                                 elif number == 11:  # D-Pad Up
@@ -286,23 +343,21 @@ class UGVGamepadController:
                             # Held buttons
                             if number == 1:  # B = Emergency Stop
                                 self.emergency_stop = bool(value)
-                            elif number == 3:  # Y = Horn
-                                self.horn = bool(value)
                                 
+        except PermissionError:
+            print("[UGV Gamepad] ERROR: Permission denied accessing /dev/input/js0")
+            print("Action: Run with 'sudo' OR add user to input group: 'sudo usermod -a -G input $USER'")
         except Exception as e:
             print(f"[UGV Gamepad] Error: {e}")
+
+    # _run_linux_loop removed (superseded by _run_inputs_loop)
 
     def _apply_deadzone(self, val):
         if abs(val) < self.deadzone:
             return 0.0
         return val
 
-    def _button_pressed(self, current, mask):
-        """Check if button was just pressed (edge detection)"""
-        was_pressed = bool(self._prev_buttons & mask) if hasattr(self, '_prev_buttons') and isinstance(self._prev_buttons, int) else False
-        is_pressed = bool(current & mask)
-        return is_pressed and not was_pressed
-
+    # _button_pressed removed (unused)
 
 # Test mode
 if __name__ == "__main__":
@@ -316,15 +371,16 @@ if __name__ == "__main__":
     controller.start()
     
     print("\nControls:")
-    print("  Left Stick  : Drive (arcade style)")
+    print("  Left Stick X: Steer")
+    print("  R2 (RT)     : Throttle")
+    print("  L2 (LT)     : Reverse/Brake")
     print("  Right Stick : PTZ Camera")
-    print("  LT/RT       : Slow/Boost")
     print("  D-Pad U/D   : Toggle Main LED")
     print("  D-Pad L/R   : Toggle Chassis LED")
     print("  A           : Center PTZ")
     print("  B           : Emergency Stop")
     print("  X           : Toggle Stabilize")
-    print("  Y           : Horn")
+    print("  Y           : Custom Preset (-10, 0)")
     print("\nPress Ctrl+C to exit\n")
     
     try:

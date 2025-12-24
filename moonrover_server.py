@@ -61,14 +61,26 @@ capture_metadata = {}  # {"box": [...], "label": "..."}
 last_capture_time = 0.0 # Cooldown for auto-capture
 
 # Mission State
+
+# Mission State
 class MissionManager:
     def __init__(self):
         self.active = False
         self.task = "IDLE" 
         self.start_time = None
         self.start_pose = None
+        
+        # Linear Mission State
         self.target_distance = 0.0
         self.current_distance = 0.0
+        
+        # Rectangle Mission State
+        self.mission_type = "linear" # 'linear' | 'rectangle'
+        self.rect_state = "IDLE" # LEG_LONG, TURN_1, LEG_SHORT, TURN_2
+        self.rect_leg_start_pose = None
+        
+        # General
+        self.save_report = True
         self.findings = {'craters': 0, 'aliens': 0}
         self.detailed_findings = [] # List of {type, radius_m, timestamp, snapshot}
         self.snapshots = []
@@ -78,38 +90,120 @@ class MissionManager:
         self.mission_id = None
         self.captured_track_ids = set()  # Track IDs already captured
 
-    def start_mission(self, distance_cm, current_pose):
+    def start_mission(self, distance_cm, current_pose, mission_type="linear", save_report=True):
         self.active = True
-        self.task = "Linear Traverse"
+        self.mission_type = mission_type
+        self.save_report = save_report
         self.start_time = time.time()
         self.start_pose = current_pose # {'x': x, 'y': y, 'theta': t}
-        self.target_distance = distance_cm / 100.0 # Convert cm to meters
-        self.current_distance = 0.0
+        self.captured_track_ids = set()
         self.findings = {'craters': 0, 'aliens': 0}
         self.detailed_findings = []
         self.snapshots = []
-        self.captured_track_ids = set()  # Reset captured IDs for new mission
-        self.message = f"Starting traverse: {distance_cm}cm"
+        
+        if mission_type == "linear":
+            self.task = "Linear Traverse"
+            self.target_distance = distance_cm / 100.0 # Convert cm to meters
+            self.current_distance = 0.0
+            self.message = f"Starting traverse: {distance_cm}cm"
+        elif mission_type == "rectangle":
+            self.task = "Rectangular Patrol"
+            self.target_distance = 0 # Infinite
+            self.rect_state = "LEG_LONG"
+            self.rect_leg_start_pose = current_pose
+            self.rect_state_start_time = time.time() # Initialize timer
+            self.message = "Starting Rectangular Patrol"
+        
         self.progress = 0
         
-        # Generate unique mission folder name
-        distance_str = f"{int(distance_cm)}cm"
-        base_folder = f"mission_{distance_str}"
-        counter = 1
-        while os.path.exists(f"public/reports/{base_folder}_{counter}"):
-            counter += 1
-        self.mission_folder = f"{base_folder}_{counter}"
-        self.mission_id = self.mission_folder
-        
-        # Create folders
-        os.makedirs(f"public/reports/{self.mission_folder}", exist_ok=True)
-        os.makedirs(f"public/detections/{self.mission_folder}", exist_ok=True)
-        
-        logger.info(f"Mission Started: {self.task} ({distance_cm}cm) -> {self.mission_folder}")
+        if self.save_report:
+            # Generate unique mission folder name
+            prefix = "mission" if mission_type == "linear" else "patrol"
+            dist_str = f"{int(distance_cm)}cm" if mission_type == "linear" else "rect"
+            base_folder = f"{prefix}_{dist_str}"
+            counter = 1
+            while os.path.exists(f"public/reports/{base_folder}_{counter}"):
+                counter += 1
+            self.mission_folder = f"{base_folder}_{counter}"
+            self.mission_id = self.mission_folder
+            
+            # Create folders
+            os.makedirs(f"public/reports/{self.mission_folder}", exist_ok=True)
+            os.makedirs(f"public/detections/{self.mission_folder}", exist_ok=True)
+            logger.info(f"Mission Started: {self.task} -> {self.mission_folder}")
+        else:
+            self.mission_folder = None
+            self.mission_id = f"temp_{int(time.time())}"
+            logger.info(f"Mission Started (No Report): {self.task}")
+
+    def normalize_angle(self, angle):
+        """Normalize angle to -180 to 180"""
+        while angle > 180: angle -= 360
+        while angle < -180: angle += 360
+        return angle
+
+    def get_angle_diff(self, target, current):
+        diff = target - current
+        return self.normalize_angle(diff)
 
     def update(self, current_pose, dt):
+        global step
         if not self.active: return {'throttle': 0, 'steering': 0}
 
+        # --- RECTANGLE MISSION LOGIC ---
+        if self.mission_type == "rectangle":
+            current_time = time.time()
+            
+            # Initialize state timer if needed
+            if not hasattr(self, 'rect_state_start_time') or self.rect_state_start_time is None:
+                self.rect_state_start_time = current_time
+
+            elapsed_state = current_time - self.rect_state_start_time
+            
+            throttle = 0.0
+            steering = 0.0
+            state = self.rect_state
+            
+            # Constants
+            LONG_LEG_DURATION = 15.0
+            SHORT_LEG_DURATION = 5.0
+            TURN_DURATION = 1.5 # As tuned by user
+            
+            if state == "LEG_LONG":
+                self.message = f"Patrol: Long Leg ({elapsed_state:.1f}s / {LONG_LEG_DURATION}s)"
+                if elapsed_state >= LONG_LEG_DURATION:
+                    self.rect_state = "TURN_1"
+                    self.rect_state_start_time = current_time
+                    logger.info("Leg Long Complete. Switching to TURN_1")
+                else:
+                    throttle = -0.16
+                    steering = 0.0
+                    
+            elif state == "TURN_1" or state == "TURN_2":
+                self.message = f"Patrol: Turning Right ({elapsed_state:.1f}s / {TURN_DURATION}s)"
+                if elapsed_state >= TURN_DURATION:
+                     next_state = "LEG_SHORT" if state == "TURN_1" else "LEG_LONG"
+                     self.rect_state = next_state
+                     self.rect_state_start_time = current_time
+                     logger.info(f"Turn Complete. Switching to {next_state}")
+                else:
+                    throttle = 0.0
+                    steering = 1.0 # Right Turn
+            
+            elif state == "LEG_SHORT":
+                self.message = f"Patrol: Short Leg ({elapsed_state:.1f}s / {SHORT_LEG_DURATION}s)"
+                if elapsed_state >= SHORT_LEG_DURATION:
+                    self.rect_state = "TURN_2"
+                    self.rect_state_start_time = current_time
+                    logger.info("Leg Short Complete. Switching to TURN_2")
+                else:
+                    throttle = -0.16
+                    steering = 0.0
+            
+            return {'throttle': throttle, 'steering': steering}
+
+
+        # --- LINEAR MISSION LOGIC ---
         # 1. Update Distance
         if self.start_pose and current_pose:
             dx = current_pose['x'] - self.start_pose['x']
@@ -139,6 +233,9 @@ class MissionManager:
         self.progress = 100
         logger.info("Mission Complete")
         
+        if not self.save_report:
+            return None
+        
         # Generate Report
         report = {
             'id': self.mission_id,
@@ -165,6 +262,10 @@ class MissionManager:
         self.message = "Mission Aborted"
         logger.info("Mission Aborted")
         
+        if not self.save_report:
+            self.mission_folder = None
+            return
+
         # Discard collected data
         if self.mission_folder:
             detections_folder = f"public/detections/{self.mission_folder}"
@@ -260,6 +361,8 @@ def receive_telemetry():
     # 1. Extract Telemetry from Rover
     throttle = request.form.get('throttle', type=float, default=0.0)*(-1)
     steer_real = request.form.get('steer_real', type=float, default=0.0)
+    battery = request.form.get('battery', type=float, default=0.0)
+    battery_percent = request.form.get('battery_percent', type=int, default=0)
     img_b64_raw = request.form.get('img_base64', '')
     
     # 2. Process Image if available (HTTP streaming mode)
@@ -390,7 +493,9 @@ def receive_telemetry():
             'telemetry': {
                 'throttle': throttle,
                 'steering': steer_real,
-                'pose': map_status['pose']
+                'pose': map_status['pose'],
+                'battery': battery,
+                'battery_percent': battery_percent
             },
             'perception': {
                 'live_craters': cached_craters,
@@ -599,9 +704,12 @@ def receive_hires_capture():
 def start_mission():
     data = request.get_json()
     dist_cm = float(data.get('distance_cm', 100))
+    mission_type = data.get('type', 'linear')
+    save_report = data.get('save_report', True)
+    
     current_pose = shared_data.get('telemetry', {}).get('pose', {'x':0, 'y':0, 'theta':0})
     
-    mission_manager.start_mission(dist_cm, current_pose)
+    mission_manager.start_mission(dist_cm, current_pose, mission_type=mission_type, save_report=save_report)
     return jsonify({'status': 'ok', 'message': 'Mission Started'})
 
 @app.route('/mission/stop', methods=['POST'])

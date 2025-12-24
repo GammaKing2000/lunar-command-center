@@ -57,9 +57,7 @@ class MapManagerLaptop:
         
         # --- KINEMATICS LOGIC ---
         if self.kinematics == 'jetracer':
-            # Ackermann Steering: Constant Radius, so w scales with v
-            # w = v / R 
-            # Curvature k = 1/R
+            # Ackermann Steering
             
             # Calibrated Turn Radii:
             # Right: R = 1.085m → k = 0.922
@@ -70,24 +68,22 @@ class MapManagerLaptop:
             
             w = 0.0
             if abs(v) > 0.01: # Only turn if moving
-                if steering > 0: # LEFT
-                    k = steering * CURVATURE_LEFT
-                    w = v * k
-                else: # RIGHT
+                if steering > 0: # RIGHT (Matched to Brain)
                     k = abs(steering) * CURVATURE_RIGHT
-                    w = -v * k
+                    w = -v * k # CW = Negative
+                else: # LEFT
+                    k = abs(steering) * CURVATURE_LEFT
+                    w = v * k # CCW = Positive
             
         else:
             # UGV / Skid Steer
-            # Can rotate in place (v=0 is fine)
-            MAX_TURN_RIGHT_RADPS = 1.124 # Reusing these as rough max rot speeds
+            MAX_TURN_RIGHT_RADPS = 1.124
             MAX_TURN_LEFT_RADPS  = 0.853
             
-            if steering > 0: # LEFT
-                w = steering * MAX_TURN_LEFT_RADPS
-            else: # RIGHT
-                w = steering * MAX_TURN_RIGHT_RADPS
-                if steering < 0: w = -w
+            if steering > 0: # RIGHT
+                w = -1 * steering * MAX_TURN_RIGHT_RADPS
+            else: # LEFT
+                w = abs(steering) * MAX_TURN_LEFT_RADPS
                 
         # Update State
         self.x += v * math.cos(self.theta) * dt
