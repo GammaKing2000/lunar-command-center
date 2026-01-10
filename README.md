@@ -5,7 +5,7 @@ A futuristic, sci-fi mission control interface for monitoring and controlling a 
 ![Dashboard Preview](https://img.shields.io/badge/Status-Active-cyan)
 
 ## Features
-
+ 
 - **Live Vision Panel** - Real-time video feed from the rover with HUD overlay, crosshairs, and crater detection bounding boxes
 - **Tactical Map** - 2D top-down view showing rover position, heading, movement trail, and detected craters
 - **Telemetry Deck** - Real-time gauges for throttle and steering, plus a rolling depth chart
